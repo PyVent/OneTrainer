@@ -5,7 +5,7 @@ from modules.ui.PySide6MuonAdamWindowView import PySide6MuonAdamWindowView
 from modules.util.ui import pyside6_components
 from modules.util.ui.PySide6UIState import PySide6UIState
 
-from PySide6.QtWidgets import QDialog, QGridLayout, QPushButton, QWidget
+from PySide6.QtWidgets import QDialog, QGridLayout, QLayout, QPushButton, QWidget
 
 
 class PySide6OptimizerParamsWindowView(BaseOptimizerParamsWindowView, QDialog):
@@ -31,6 +31,7 @@ class PySide6OptimizerParamsWindowView(BaseOptimizerParamsWindowView, QDialog):
         outer.setRowStretch(0, 1)
 
         scroll, self._frame = pyside6_components.scrollable_frame(self)
+        scroll.widget().layout().setSizeConstraint(QLayout.SizeConstraint.SetMinAndMaxSize)
         lo = pyside6_components._layout(self._frame)
         lo.setColumnStretch(1, 1)
         lo.setColumnMinimumWidth(2, 50)

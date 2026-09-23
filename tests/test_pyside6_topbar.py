@@ -36,13 +36,17 @@ class TopBarLayoutTest(unittest.TestCase):
         )
         self.addCleanup(view.close)
 
-        for width, mode in ((1100, "wide"), (900, "medium"), (800, "compact"), (540, "compact")):
+        for width, mode in ((1300, "wide"), (1100, "medium"), (900, "medium"),
+                            (800, "compact"), (540, "compact")):
             with self.subTest(width=width):
                 view.resize(width, 180)
                 view.show()
                 self.app.processEvents()
                 self.assertEqual(view._layout_mode, mode)
-                self.assertLessEqual(view.sizeHint().width(), width)
+                self.assertEqual(view.width(), width)
+                for widget in (view._model_combo, view.training_method,
+                               view._preset_button, view._load_button, view._save_button):
+                    self.assertLessEqual(widget.mapTo(view, widget.rect().bottomRight()).x(), width)
                 self.assertTrue(view._model_combo.isVisible())
                 self.assertTrue(view.training_method.isVisible())
 

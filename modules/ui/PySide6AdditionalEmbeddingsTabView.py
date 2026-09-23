@@ -5,6 +5,7 @@ from modules.util.ui import pyside6_components
 from modules.util.ui.PySide6UIState import PySide6UIState
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -25,7 +26,7 @@ class PySide6AdditionalEmbeddingsTabView(PySide6ConfigListView, BaseAdditionalEm
             attr_name="additional_embeddings",
             enable_key="train",
             from_external_file=False,
-            add_button_text="add embedding",
+            add_button_text="Add Embedding",
             is_full_width=True,
             show_toggle_button=True,
         )
@@ -67,6 +68,12 @@ class PySide6EmbeddingWidgetView(BaseEmbeddingWidgetView, QWidget):
 
         actions = QHBoxLayout()
         actions.addStretch(1)
+        top[1].setIcon(QIcon())
+        top[1].setText("Copy")
+        top[1].setFixedSize(max(64, top[1].fontMetrics().horizontalAdvance("Copy") + 20), 38)
+        top[0].setIcon(QIcon())
+        top[0].setText("Remove")
+        top[0].setFixedSize(max(76, top[0].fontMetrics().horizontalAdvance("Remove") + 20), 38)
         top[1].setAccessibleName("Clone embedding")
         top[0].setAccessibleName("Remove embedding")
         actions.addWidget(top[1])

@@ -7,7 +7,7 @@ from modules.util.ui import pyside6_components
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from PIL.ImageQt import ImageQt
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QTabWidget,
     QTextEdit,
     QWidget,
@@ -43,6 +44,7 @@ class PySide6ConceptWindowView(BaseConceptWindowView, QDialog):
         self.image_preview_file_index = 0
         self._preview_augmentations = True
         self.bucket_fig = None
+        self._image_layout_mode = None
 
         self.setWindowTitle("Concept")
         self.resize(800, 700)
@@ -96,13 +98,13 @@ class PySide6ConceptWindowView(BaseConceptWindowView, QDialog):
         self._image_label.setPixmap(QPixmap.fromImage(ImageQt(image_preview.convert("RGBA"))).scaled(300, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         pb_lo.addWidget(self._image_label, 0, 0, 1, 3)
 
-        prev_btn = QPushButton("<", preview_panel)
-        prev_btn.setFixedWidth(40)
+        prev_btn = QPushButton("Previous", preview_panel)
+        prev_btn.setToolTip("Show previous preview image")
         prev_btn.clicked.connect(self._prev_image_preview)
         update_btn = QPushButton("Update Preview", preview_panel)
         update_btn.clicked.connect(self._update_image_preview)
-        next_btn = QPushButton(">", preview_panel)
-        next_btn.setFixedWidth(40)
+        next_btn = QPushButton("Next", preview_panel)
+        next_btn.setToolTip("Show next preview image")
         next_btn.clicked.connect(self._next_image_preview)
         self._aug_checkbox = QCheckBox("Show Augmentations", preview_panel)
         self._aug_checkbox.setChecked(True)
@@ -124,6 +126,12 @@ class PySide6ConceptWindowView(BaseConceptWindowView, QDialog):
         pb_lo.addWidget(self._caption_box, 4, 0, 1, 3)
 
         lo_img_outer.addWidget(preview_panel, 0, 1, Qt.AlignTop)
+        self._image_scroll = img_scroll
+        self._image_layout = lo_img_outer
+        self._image_form = img_form
+        self._image_preview_panel = preview_panel
+        img_scroll.viewport().installEventFilter(self)
+        self._reflow_image_preview(img_scroll.viewport().width())
         tabs.addTab(img_scroll, "image augmentation")
 
         # --- text augmentation tab ---
@@ -151,6 +159,12 @@ class PySide6ConceptWindowView(BaseConceptWindowView, QDialog):
         stats_lo.setColumnMinimumWidth(2, 150)
         stats_lo.setColumnMinimumWidth(3, 150)
         self.build_concept_stats_tab(stats_frame, controller)
+        stats_lo.setVerticalSpacing(10)
+        for label in stats_frame.findChildren(QLabel):
+            if label.text().startswith("\n"):
+                label.setText(label.text().lstrip("\n"))
+            label.setWordWrap(True)
+            label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
 
         plt.set_loglevel('WARNING')
         self.bucket_fig, self.bucket_ax = plt.subplots(figsize=(7, 3))
@@ -183,6 +197,28 @@ class PySide6ConceptWindowView(BaseConceptWindowView, QDialog):
         #automatic concept scan
         self.scan_thread = threading.Thread(target=controller.auto_update_concept_stats, args=[self], daemon=True)
         self.scan_thread.start()
+
+    def eventFilter(self, watched, event):
+        if watched is self._image_scroll.viewport() and event.type() == QEvent.Type.Resize:
+            self._reflow_image_preview(event.size().width())
+        return super().eventFilter(watched, event)
+
+    def _reflow_image_preview(self, width: int):
+        mode = "side_by_side" if width >= 1000 else "stacked"
+        if mode == self._image_layout_mode:
+            return
+        layout = self._image_layout
+        layout.removeWidget(self._image_form)
+        layout.removeWidget(self._image_preview_panel)
+        if mode == "side_by_side":
+            layout.addWidget(self._image_form, 0, 0, Qt.AlignmentFlag.AlignTop)
+            layout.addWidget(self._image_preview_panel, 0, 1, Qt.AlignmentFlag.AlignTop)
+            layout.setColumnStretch(1, 0)
+        else:
+            layout.addWidget(self._image_form, 0, 0, Qt.AlignmentFlag.AlignTop)
+            layout.addWidget(self._image_preview_panel, 1, 0, Qt.AlignmentFlag.AlignHCenter)
+            layout.setColumnStretch(1, 0)
+        self._image_layout_mode = mode
 
 
     def _on_aug_toggle(self, checked: bool):

@@ -5,6 +5,7 @@ from modules.ui.SamplingTabController import SamplingTabController
 from modules.util.ui import pyside6_components
 from modules.util.ui.pyside6_util import QtABCMeta
 
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 
@@ -47,6 +48,15 @@ class PySide6SampleWidgetView(BaseSampleWidgetView, QWidget, metaclass=QtABCMeta
         self.build_content(self, element, self.ui_state, i, open_command, remove_command, clone_command, save_command)
         layout = pyside6_components._layout(self)
         self._fields = tuple(layout.itemAtPosition(0, column).widget() for column in range(12))
+        for button, text, width in ((self._fields[0], "Remove", 76),
+                                    (self._fields[1], "Copy", 64),
+                                    (self.button, "Edit", 52)):
+            button.setIcon(QIcon())
+            button.setText(text)
+            button.setFixedSize(max(width, button.fontMetrics().horizontalAdvance(text) + 20), 38)
+        self._fields[0].setToolTip("Remove sample")
+        self._fields[1].setToolTip("Duplicate sample")
+        self.button.setToolTip("Edit sample settings")
         self._layout_mode = None
         self._reflow_fields(0)
         # Below the compact form's natural minimum the list should scroll,

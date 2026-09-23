@@ -3,7 +3,7 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QLineEdit
+from PySide6.QtWidgets import QApplication, QGroupBox, QLineEdit
 
 from modules.ui.PySide6TrainingTabView import PySide6TrainingTabView
 from modules.ui.TrainingTabController import TrainingTabController
@@ -29,8 +29,13 @@ class TrainingLayoutTest(unittest.TestCase):
         )
         field_count = len(view.findChildren(QLineEdit))
         columns = view._columns
+        self.assertEqual(
+            {group.title() for group in view.findChildren(QGroupBox)},
+            {"Optimization", "Text Encoder", "Embeddings", "Precision and EMA", "UNet",
+             "Noise and timesteps", "Masked training", "Loss", "Layer selection"},
+        )
 
-        for width, expected_count in ((1600, 3), (1000, 2), (650, 1), (1600, 3)):
+        for width, expected_count in ((1600, 3), (1000, 2), (684, 1), (650, 1), (1600, 3)):
             with self.subTest(width=width):
                 view.resize(width, 700)
                 self.app.processEvents()
@@ -38,6 +43,7 @@ class TrainingLayoutTest(unittest.TestCase):
                 self.assertEqual(view._column_layout.count(), 3)
                 self.assertEqual(view._columns, columns)
                 self.assertEqual(len(view.findChildren(QLineEdit)), field_count)
+                self.assertEqual(view.scroll_frame.horizontalScrollBar().maximum(), 0)
                 for index, column in enumerate(columns):
                     layout_index = view._column_layout.indexOf(column)
                     row, col, _, _ = view._column_layout.getItemPosition(layout_index)

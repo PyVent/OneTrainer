@@ -260,9 +260,9 @@ class BaseTrainUIView(ABC):
             ("JPG", ImageFormat.JPG),
         ], ui_state, "sample_image_format")
 
-        self.components.button(top_frame, 0, 6, "sample now", self.sample_now)
+        self.components.button(top_frame, 0, 6, "Sample Now", self.sample_now)
 
-        self.components.button(top_frame, 0, 7, "manual sample", self.open_manual_sample_window)
+        self.components.button(top_frame, 0, 7, "Manual Sample", self.open_manual_sample_window)
 
         self.components.label(sub_frame, 0, 0, "Non-EMA Sampling",
                          tooltip="Whether to include non-ema sampling when using ema.")
@@ -279,7 +279,7 @@ class BaseTrainUIView(ABC):
         self.components.time_entry(frame, 0, 1, ui_state, "backup_after", "backup_after_unit")
 
         # backup now
-        self.components.button(frame, 0, 3, "backup now", self.backup_now)
+        self.components.button(frame, 0, 3, "Backup Now", self.backup_now)
 
         # rolling backup
         self.components.label(frame, 1, 0, "Rolling Backup",
@@ -302,7 +302,7 @@ class BaseTrainUIView(ABC):
         self.components.time_entry(frame, 4, 1, ui_state, "save_every", "save_every_unit")
 
         # save now
-        self.components.button(frame, 4, 3, "save now", self.save_now)
+        self.components.button(frame, 4, 3, "Save Now", self.save_now)
 
         # skip save
         self.components.label(frame, 5, 0, "Skip First",

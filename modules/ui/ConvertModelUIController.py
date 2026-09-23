@@ -1,4 +1,3 @@
-import traceback
 from uuid import uuid4
 
 from modules.util import create, huggingface_util
@@ -50,9 +49,9 @@ class ConvertModelUIController:
         formats = self.convert_model_args.model_type.supported_output_formats(self.convert_model_args.training_method)
         return [(labels[fmt], fmt) for fmt in formats]
 
-    def convert_model(self):
+    def perform_conversion(self):
+        """Convert a model without touching any GUI widget."""
         try:
-            self.view.set_converting(True)
             model_loader = create.create_model_loader(
                 model_type=self.convert_model_args.model_type,
                 training_method=self.convert_model_args.training_method
@@ -97,8 +96,5 @@ class ConvertModelUIController:
                 dtype=self.convert_model_args.output_dtype.torch_dtype(),
             )
             print("Model converted")
-        except Exception:
-            traceback.print_exc()
-
-        torch_gc()
-        self.view.set_converting(False)
+        finally:
+            torch_gc()

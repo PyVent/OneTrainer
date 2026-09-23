@@ -4,7 +4,8 @@ from abc import ABC
 from modules.ui.BaseConfigListView import BaseConfigListView
 from modules.util.ui import pyside6_components
 
-from PySide6.QtWidgets import QInputDialog, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QInputDialog, QLabel, QWidget
 
 
 class PySide6ConfigListView(BaseConfigListView, ABC):
@@ -61,7 +62,36 @@ class PySide6ConfigListView(BaseConfigListView, ABC):
         if self.is_full_width:
             pyside6_components._layout(content).setColumnStretch(0, 1)
         content._scroll_area = scroll
+        empty = QLabel(content)
+        empty.setObjectName("emptyState")
+        empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty.setWordWrap(True)
+        empty.setMinimumHeight(120)
+        pyside6_components._layout(content).addWidget(empty, 0, 0)
+        content._empty_label = empty
         return content
+
+    def _update_widget_visibility(self):
+        super()._update_widget_visibility()
+        empty = getattr(self.element_list, "_empty_label", None)
+        if empty is None:
+            return
+        has_visible_items = any(
+            index < len(self.current_config) and self._element_matches_filters(self.current_config[index])
+            for index, _widget in enumerate(self.widgets)
+        )
+        if not has_visible_items:
+            noun, action = {
+                "concept_file_name": ("concepts", "Add Concept"),
+                "sample_definition_file_name": ("samples", "Add Sample"),
+                "additional_embeddings": ("embeddings", "Add Embedding"),
+            }.get(self.attr_name, ("items", "Add"))
+            empty.setText(
+                f"No {noun} to show. Use {action} above to create one."
+                if not self.current_config else
+                f"No {noun} match the current filters."
+            )
+        empty.setVisible(not has_visible_items)
 
     def _wait_for_window(self, window):
         window.exec()

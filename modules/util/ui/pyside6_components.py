@@ -10,8 +10,8 @@ from modules.util.path_util import supported_image_extensions, supported_video_e
 from modules.util.ui.pyside6_validation import PySide6FieldValidator, PySide6PathValidator
 from modules.util.ui.UIState import BaseUIState
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QPixmap, QWheelEvent
+from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap, QWheelEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -31,6 +31,10 @@ from PySide6.QtWidgets import (
 )
 
 PAD = 10
+CONTROL_HEIGHT = 38
+COMBO_MIN_WIDTH = 140
+COMBO_POPUP_MAX_WIDTH = 560
+COMBO_POPUP_MAX_ROWS = 10
 
 
 # ---------------------------------------------------------------------------
@@ -85,8 +89,6 @@ def _add(
         row: int,
         col: int,
         sticky: str = "new",
-        padx: int = PAD,
-        pady: int = PAD,
         rowspan: int = 1,
         colspan: int = 1,
 ):
@@ -208,6 +210,7 @@ def entry(
 
     component = QLineEdit(master)
     component.setMinimumWidth(width)
+    component.setFixedHeight(CONTROL_HEIGHT)
     if placeholder:
         component.setPlaceholderText(placeholder)
     _add(_layout(master), component, row, column, sticky=sticky)
@@ -259,9 +262,9 @@ def path_entry(
     frame = QWidget(master)
     frame_lo = QGridLayout(frame)
     frame_lo.setContentsMargins(0, 0, 0, 0)
-    frame_lo.setSpacing(0)
+    frame_lo.setSpacing(6)
     frame_lo.setColumnStretch(0, 1)
-    _add(_layout(master), frame, row, column, sticky="new", padx=0, pady=0, colspan=columnspan)
+    _add(_layout(master), frame, row, column, sticky="new", colspan=columnspan)
 
     def _path_validator_factory(comp, var, state, name, **kw):
         return PySide6PathValidator(comp, var, state, name, io_type=io_type, **kw)
@@ -337,8 +340,9 @@ def path_entry(
             if command:
                 command(chosen_str)
 
-    btn = QPushButton("...", frame)
-    btn.setFixedWidth(40)
+    btn = QPushButton("Browse", frame)
+    btn.setFixedSize(88, CONTROL_HEIGHT)
+    btn.setToolTip("Choose a directory" if mode == "dir" else "Choose a file")
     btn.clicked.connect(_open_dialog)
     frame_lo.addWidget(btn, 0, 1)
 
@@ -355,7 +359,7 @@ def time_entry(
         supports_time_units: bool = True,
 ) -> QWidget:
     frame = QWidget(master)
-    _add(_layout(master), frame, row, column, sticky="new", padx=0, pady=0)
+    _add(_layout(master), frame, row, column, sticky="new")
 
     entry(frame, 0, 0, ui_state, var_name, width=50)
 
@@ -440,8 +444,12 @@ def layer_filter_entry(
 
 
 def icon_button(master: QWidget, row: int, column: int, text: str, command: Callable[[], None]) -> QPushButton:
-    component = QPushButton(text, master)
-    component.setFixedWidth(40)
+    opens_settings = text in ("...", "…")
+    component = QPushButton("Edit" if opens_settings else text, master)
+    component.setFixedSize(58 if opens_settings else 40, CONTROL_HEIGHT)
+    if opens_settings:
+        component.setToolTip("Edit settings")
+        component.setAccessibleName("Edit settings")
     component.clicked.connect(command)
     _add(_layout(master), component, row, column, sticky="new")
     return component
@@ -458,10 +466,38 @@ def colored_icon_button(
 ) -> QPushButton:
     color = fg_color[0] if isinstance(fg_color, (tuple, list)) else fg_color
     component = QPushButton(text, master)
-    component.setFixedSize(20, 20)
-    component.setStyleSheet(f"QPushButton {{ background-color: {color}; border-radius: 2px; }}")
+    rgb = QColor(color)
+    brightness = rgb.red() * 0.299 + rgb.green() * 0.587 + rgb.blue() * 0.114
+    foreground = "#17243d" if brightness >= 100 else "#ffffff"
+    component.setStyleSheet(
+        f"QPushButton {{ background-color: {color}; color: {foreground}; "
+        f"border: none; border-radius: 6px; padding: 0; min-height: {CONTROL_HEIGHT}px; "
+        f"max-height: {CONTROL_HEIGHT}px; font-size: 16px; font-weight: 700; }}"
+    )
+    component.setFixedSize(CONTROL_HEIGHT, CONTROL_HEIGHT)
+    action = "Remove" if text == "X" else "Duplicate" if text == "+" else text
+    if text in ("X", "+"):
+        # Draw simple vector marks so they stay visible even when a system font
+        # lacks the glyph or a stylesheet leaves too little room for text.
+        mark = QPixmap(20, 20)
+        mark.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(mark)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(QColor(foreground), 2.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        if text == "X":
+            painter.drawLine(5, 5, 15, 15)
+            painter.drawLine(15, 5, 5, 15)
+        else:
+            painter.drawLine(5, 10, 15, 10)
+            painter.drawLine(10, 5, 10, 15)
+        painter.end()
+        component.setText("")
+        component.setIcon(QIcon(mark))
+        component.setIconSize(QSize(20, 20))
+    component.setToolTip(action)
+    component.setAccessibleName(action)
     component.clicked.connect(command)
-    _add(_layout(master), component, row, column, sticky="new", padx=padx, pady=0)
+    _add(_layout(master), component, row, column, sticky="new")
     return component
 
 
@@ -484,7 +520,7 @@ def button(
         component.setMinimumWidth(width)
     if tooltip:
         _set_tooltip(component, tooltip)
-    _add(_layout(master), component, row, column, sticky=sticky, padx=padx, pady=pady)
+    _add(_layout(master), component, row, column, sticky=sticky)
     return component
 
 
@@ -509,6 +545,7 @@ def preset_menu_button(
     build_menu(menu, tree)
 
     component = QToolButton(master)
+    component.setObjectName("presetMenuButton")
     component.setText(text)
     component.setMenu(menu)
     component.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
@@ -518,6 +555,7 @@ def preset_menu_button(
     # height explicitly so it doesn't grow taller than its siblings.
     reference_button = QPushButton("", master)
     component.setFixedHeight(reference_button.sizeHint().height())
+    reference_button.hide()
     reference_button.deleteLater()
     _add(_layout(master), component, row, column, sticky=sticky)
     return component
@@ -528,6 +566,17 @@ def preset_menu_button(
 # ---------------------------------------------------------------------------
 
 class NoScrollComboBox(QComboBox):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumWidth(COMBO_MIN_WIDTH)
+        self.setFixedHeight(CONTROL_HEIGHT)
+        # A long option must not set the minimum width of the entire form.
+        self.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.setMinimumContentsLength(12)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setMaxVisibleItems(COMBO_POPUP_MAX_ROWS)
+        self.view().setTextElideMode(Qt.TextElideMode.ElideRight)
+
     # scrolling over a closed combo box is an easy way to accidentally change
     # its value while just scrolling the surrounding page; only scroll while open
     def wheelEvent(self, event: QWheelEvent):
@@ -535,6 +584,41 @@ class NoScrollComboBox(QComboBox):
             super().wheelEvent(event)
         else:
             event.ignore()
+
+    def showPopup(self):
+        super().showPopup()
+        # The popup viewport receives its final geometry on the next event
+        # cycle. Size against that geometry rather than the provisional one.
+        QTimer.singleShot(0, self._adjust_popup_size)
+
+    def _adjust_popup_size(self):
+        if self.count() == 0 or not self.view().isVisible():
+            return
+
+        popup = self.view().window()
+        screen = self.screen()
+        available = screen.availableGeometry() if screen else None
+        width_limit = min(COMBO_POPUP_MAX_WIDTH, available.width() - 24) if available else COMBO_POPUP_MAX_WIDTH
+        content_width = max(
+            (self.fontMetrics().horizontalAdvance(self.itemText(index)) for index in range(self.count())),
+            default=0,
+        ) + 40
+        width = min(width_limit, max(self.width(), content_width))
+
+        row_height = max(24, self.view().sizeHintForRow(0))
+        visible_rows = min(self.count(), COMBO_POPUP_MAX_ROWS)
+        # Qt adds a frame and popup margins around the item viewport. Account
+        # for their actual size so the last visible option is never cut in half
+        # with larger fonts or display scaling.
+        chrome_height = popup.height() - self.view().viewport().height()
+        # Qt's combo popup adds a separate top/bottom container around the
+        # view after showPopup returns; reserve its remaining 10 pixels too.
+        height = visible_rows * row_height + chrome_height + 10
+        if available:
+            height = min(height, available.height() - 24)
+        popup.resize(width, height)
+        if available and popup.x() + width > available.right() + 1:
+            popup.move(max(available.left(), available.right() + 1 - width), popup.y())
 
 
 def options(
@@ -592,15 +676,17 @@ def options_adv(
     frame_lo = QGridLayout(frame)
     frame_lo.setContentsMargins(0, 0, 0, 0)
     frame_lo.setColumnStretch(0, 1)
-    _add(_layout(master), frame, row, column, sticky="new", padx=0, pady=0)
+    _add(_layout(master), frame, row, column, sticky="new")
 
     combo = options(frame, 0, 0, values, ui_state, var_name, command=command)
 
-    adv_btn = QPushButton("…", frame)
-    adv_btn.setFixedWidth(20)
+    adv_btn = QPushButton("Edit", frame)
+    adv_btn.setFixedSize(58, CONTROL_HEIGHT)
+    adv_btn.setToolTip("Advanced settings")
+    adv_btn.setAccessibleName("Advanced settings")
     if adv_command:
         adv_btn.clicked.connect(adv_command)
-    _add(frame_lo, adv_btn, 0, 1, sticky="nsew", padx=(0, PAD), pady=PAD)
+    _add(frame_lo, adv_btn, 0, 1, sticky="nsew")
 
     if command:
         command(ui_state.get_var(var_name).get())

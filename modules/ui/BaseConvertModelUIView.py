@@ -77,7 +77,7 @@ class BaseConvertModelUIView:
             io_type=PathIOType.MODEL,
         )
 
-        self.button = self.components.button(frame, 6, 1, "Convert", controller.convert_model)
+        self.button = self.components.button(frame, 6, 1, "Convert", self.start_conversion)
 
     def build_dynamic_content(self, frame, controller, ui_state):
         row = 0

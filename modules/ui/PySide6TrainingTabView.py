@@ -10,7 +10,7 @@ from modules.util.ui import pyside6_components
 from modules.util.ui.pyside6_util import QtABCMeta
 
 from PySide6.QtCore import QEvent
-from PySide6.QtWidgets import QScrollArea, QSizePolicy, QWidget
+from PySide6.QtWidgets import QFrame, QGroupBox, QLabel, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
 
 
 class PySide6TrainingTabView(BaseTrainingTabView, QWidget, metaclass=QtABCMeta):
@@ -66,6 +66,8 @@ class PySide6TrainingTabView(BaseTrainingTabView, QWidget, metaclass=QtABCMeta):
         pyside6_components._layout(column_2).setColumnStretch(0, 1)
 
         self.build(column_0, column_1, column_2, self.controller, self.ui_state)
+        self._label_advanced_buttons()
+        self._group_sections((column_0, column_1, column_2))
 
         for col_widget in (column_0, column_1, column_2):
             lo = pyside6_components._layout(col_widget)
@@ -76,6 +78,65 @@ class PySide6TrainingTabView(BaseTrainingTabView, QWidget, metaclass=QtABCMeta):
         self._column_count = 0
         scroll.viewport().installEventFilter(self)
         self._reflow_columns(scroll.viewport().width())
+
+    def _group_sections(self, columns):
+        titles = {
+            "Optimizer": "Optimization",
+            "Attention": "Precision and EMA",
+            "Train UNet": "UNet",
+            "Train Transformer": "Transformer",
+            "Train Prior": "Prior",
+            "Include Unconditional Transformer": "Unconditional transformer",
+            "Offset Noise Weight": "Noise and timesteps",
+            "Masked Training": "Masked training",
+            "MSE Strength": "Loss",
+            "Layer Filter": "Layer selection",
+            "Embeddings Learning Rate": "Embeddings",
+        }
+        for column in columns:
+            layout = pyside6_components._layout(column)
+            sections = [layout.itemAt(index).widget() for index in range(layout.count())]
+            for section in sections:
+                if section is None:
+                    continue
+                label = next(iter(section.findChildren(QLabel)), None)
+                first_field = label.text() if label is not None else ""
+                if "Text Encoder" in first_field:
+                    title = first_field.replace("Train ", "").replace("Include ", "")
+                else:
+                    title = titles.get(first_field, first_field or "Settings")
+
+                index = layout.indexOf(section)
+                row, col, row_span, col_span = layout.getItemPosition(index)
+                layout.removeWidget(section)
+                if isinstance(section, QFrame):
+                    section.setFrameShape(QFrame.Shape.NoFrame)
+
+                group = QGroupBox(title, column)
+                group.setAccessibleName(title)
+                group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+                group_layout = QVBoxLayout(group)
+                group_layout.setContentsMargins(2, 2, 2, 2)
+                group_layout.addWidget(section)
+                layout.addWidget(group, row, col, row_span, col_span)
+
+    def _label_advanced_buttons(self):
+        for label in self.findChildren(QLabel):
+            if label.text() not in {"Optimizer", "Learning Rate Scheduler", "Timestep Distribution"}:
+                continue
+            grid = label.parentWidget().layout()
+            index = grid.indexOf(label)
+            if index < 0:
+                continue
+            row, column, _, _ = grid.getItemPosition(index)
+            item = grid.itemAtPosition(row, column + 1)
+            if item is None or item.widget() is None:
+                continue
+            button = item.widget().findChild(QPushButton)
+            if button is not None:
+                button.setText("Settings")
+                button.setFixedWidth(max(76, button.fontMetrics().horizontalAdvance("Settings") + 20))
+                button.setToolTip(f"Configure {label.text().lower()}")
 
     def eventFilter(self, watched, event):
         if self.scroll_frame is not None and watched is self.scroll_frame.viewport():

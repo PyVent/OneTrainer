@@ -2,7 +2,7 @@ from modules.ui.BaseMuonAdamWindowView import BaseMuonAdamWindowView
 from modules.ui.MuonAdamWindowController import MuonAdamWindowController
 from modules.util.ui import pyside6_components
 
-from PySide6.QtWidgets import QDialog, QGridLayout, QPushButton
+from PySide6.QtWidgets import QDialog, QGridLayout, QLayout, QPushButton
 
 
 class PySide6MuonAdamWindowView(BaseMuonAdamWindowView, QDialog):
@@ -20,6 +20,7 @@ class PySide6MuonAdamWindowView(BaseMuonAdamWindowView, QDialog):
         outer.setRowStretch(0, 1)
 
         scroll, frame = pyside6_components.scrollable_frame(self)
+        scroll.widget().layout().setSizeConstraint(QLayout.SizeConstraint.SetMinAndMaxSize)
         lo = pyside6_components._layout(frame)
         lo.setColumnStretch(1, 1)
         lo.setColumnMinimumWidth(2, 50)

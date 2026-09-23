@@ -5,13 +5,17 @@ from modules.util.ui import pyside6_components
 from modules.util.ui.pyside6_util import QtABCMeta
 from modules.util.ui.PySide6UIState import PySide6UIState
 
+from pathlib import Path
+
 from PIL.ImageQt import ImageQt
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import Qt, QTimer, QSignalBlocker
+from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QGridLayout,
+    QHBoxLayout,
     QLabel,
+    QLineEdit,
     QScrollArea,
     QTabWidget,
     QTextEdit,
@@ -31,7 +35,7 @@ class PySide6VideoToolUIView(BaseVideoToolUIView, QDialog, metaclass=QtABCMeta):
         self._preview_label: QLabel | None = None
         self._preview_caption_label: QLabel | None = None
 
-        ui_state = PySide6UIState(controller.args)
+        self.ui_state = PySide6UIState(controller.args)
 
         self.setWindowTitle("Video Tools")
         self.resize(700, 750)
@@ -58,11 +62,36 @@ class PySide6VideoToolUIView(BaseVideoToolUIView, QDialog, metaclass=QtABCMeta):
             lo.setContentsMargins(_PAD, _PAD, _PAD, _PAD)
             lo.setColumnMinimumWidth(0, 120)
             lo.setColumnStretch(3, 1)
-            build_fn(frame, controller, ui_state)
+            build_fn(frame, controller, self.ui_state)
+            if name != "download":
+                self._arrange_time_range(frame)
             lo.setRowStretch(lo.rowCount(), 1)
             tabs.addTab(scroll, name)
 
         outer.addWidget(self._build_status_bar(), 1, 0)
+
+    @staticmethod
+    def _arrange_time_range(frame: QWidget):
+        """The shared builder places both endpoints in one legacy grid cell."""
+        layout = pyside6_components._layout(frame)
+        endpoints = [
+            layout.itemAt(index).widget()
+            for index in range(layout.count())
+            if layout.getItemPosition(index)[:2] == (1, 1)
+            and isinstance(layout.itemAt(index).widget(), QLineEdit)
+        ]
+        if len(endpoints) != 2:
+            return
+        range_frame = QWidget(frame)
+        range_layout = QHBoxLayout(range_frame)
+        range_layout.setContentsMargins(0, 0, 0, 0)
+        range_layout.setSpacing(8)
+        for endpoint in endpoints:
+            layout.removeWidget(endpoint)
+        range_layout.addWidget(endpoints[0], 1)
+        range_layout.addWidget(QLabel("to", range_frame))
+        range_layout.addWidget(endpoints[1], 1)
+        layout.addWidget(range_frame, 1, 1)
 
     def _build_status_bar(self):
         frame = QWidget(self)
@@ -72,7 +101,7 @@ class PySide6VideoToolUIView(BaseVideoToolUIView, QDialog, metaclass=QtABCMeta):
 
         self._preview_label = QLabel(frame)
         self._preview_label.setFixedSize(150, 150)
-        preview = load_image("resources/icons/icon.png", 'RGB')
+        preview = load_image(str(Path(__file__).resolve().parents[2] / "resources/icons/icon.png"), 'RGB')
         preview.thumbnail((150, 150))
         self._preview_label.setPixmap(
             QPixmap.fromImage(ImageQt(preview.convert("RGBA"))).scaled(
@@ -110,6 +139,14 @@ class PySide6VideoToolUIView(BaseVideoToolUIView, QDialog, metaclass=QtABCMeta):
             pyside6_components._layout(master), widget, row, col, sticky="w", rowspan=2
         )
         widget.textChanged.connect(lambda: var.set(widget.toPlainText()))
+        def sync_from_state(value):
+            value = str(value)
+            if widget.toPlainText() != value:
+                with QSignalBlocker(widget):
+                    widget.setPlainText(value)
+
+        binding_id = var._bind_widget(sync_from_state)
+        widget.destroyed.connect(lambda: var._unbind_widget(binding_id))
         return widget
 
     def schedule_on_main_thread(self, fn):
@@ -124,11 +161,11 @@ class PySide6VideoToolUIView(BaseVideoToolUIView, QDialog, metaclass=QtABCMeta):
 
     def update_preview(self, preview_image, label_text: str):
         # Called from the video tool's worker thread — defer to main thread
-        pixmap = QPixmap.fromImage(ImageQt(preview_image.convert("RGBA")))
-        self.schedule_on_main_thread(lambda: self._do_update_preview(pixmap, label_text))
+        image = ImageQt(preview_image.convert("RGBA")).copy()
+        self.schedule_on_main_thread(lambda: self._do_update_preview(image, label_text))
 
-    def _do_update_preview(self, pixmap: QPixmap, label_text: str):
+    def _do_update_preview(self, image: QImage, label_text: str):
         self._preview_label.setPixmap(
-            pixmap.scaled(150, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            QPixmap.fromImage(image).scaled(150, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         )
         self._preview_caption_label.setText(label_text)

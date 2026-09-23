@@ -7,9 +7,9 @@ from modules.util.ui.PySide6UIState import PySide6UIState
 from modules.util.ui.QtVar import QtVar
 
 from PIL.ImageQt import ImageQt
-from PySide6.QtCore import QEvent, QObject, QTimer
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QCheckBox, QGridLayout, QLabel, QLineEdit, QPushButton, QWidget
+from PySide6.QtWidgets import QCheckBox, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
 
 
 class _ViewportResizeFilter(QObject):
@@ -69,7 +69,7 @@ class PySide6ConceptTabView(PySide6ConfigListView, BaseConceptTabView):
             viewport_width = content._scroll_area.viewport().width()
         except RuntimeError:
             return  # A queued initial resize can outlive a replaced config list.
-        columns = max(1, min(6, (viewport_width + 10) // 170))
+        columns = max(1, min(6, (viewport_width + 10) // 240))
         if columns == self._grid_columns:
             return
         self._grid_columns = columns
@@ -152,39 +152,52 @@ class PySide6ConceptWidgetView(BaseConceptWidgetView, QWidget):
         self.text_ui_state = PySide6UIState(concept.text)
         self.i = i
 
-        self.setFixedSize(160, 180)
+        self.setFixedSize(230, 240)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(6, 5, 6, 5)
+        layout.setSpacing(4)
 
         image = self._get_preview_image()
         pixmap = QPixmap.fromImage(ImageQt(image.convert("RGBA")))
         self.image_label = QLabel(self)
         self.image_label.setPixmap(pixmap)
         self.image_label.setFixedSize(150, 150)
-        self.image_label.move(5, 0)
+        layout.addWidget(self.image_label, 0, Qt.AlignmentFlag.AlignHCenter)
         self.image_label.mousePressEvent = lambda _: open_command(
             self.i, (self.ui_state, self.image_ui_state, self.text_ui_state)
         )
 
         self.name_label = QLabel(self._get_display_name(), self)
-        self.name_label.setFixedWidth(140)
-        self.name_label.move(5, 153)
+        self.name_label.setWordWrap(True)
+        self.name_label.setToolTip(self._get_display_name())
 
-        close_btn = QPushButton("X", self)
-        close_btn.setFixedSize(24, 24)
+        actions = QHBoxLayout()
+        actions.setContentsMargins(0, 0, 0, 0)
+        actions.setSpacing(6)
+        layout.addLayout(actions)
+
+        close_btn = QPushButton("Remove", self)
+        close_btn.setMinimumWidth(close_btn.fontMetrics().horizontalAdvance("Remove") + 20)
+        close_btn.setMinimumHeight(38)
         close_btn.setStyleSheet("background-color: #C00000; color: white;")
-        close_btn.move(5, 0)
+        close_btn.setToolTip("Remove concept")
         close_btn.clicked.connect(lambda: remove_command(self.i))
+        actions.addWidget(close_btn)
 
-        clone_btn = QPushButton("+", self)
-        clone_btn.setFixedSize(24, 24)
+        clone_btn = QPushButton("Copy", self)
+        clone_btn.setMinimumWidth(clone_btn.fontMetrics().horizontalAdvance("Copy") + 20)
+        clone_btn.setMinimumHeight(38)
         clone_btn.setStyleSheet("background-color: #00C000; color: white;")
-        clone_btn.move(34, 0)
+        clone_btn.setToolTip("Duplicate concept")
         clone_btn.clicked.connect(lambda: clone_command(self.i, controller.randomize_seed))
+        actions.addWidget(clone_btn)
 
         enabled_cb = QCheckBox(self)
         enabled_cb.setChecked(concept.enabled)
         enabled_cb.setFixedSize(20, 20)
         enabled_cb.setStyleSheet("QCheckBox::indicator { width: 20px; height: 20px; }")
-        enabled_cb.move(135, 0)
+        enabled_cb.setToolTip("Enable concept")
+        actions.addWidget(enabled_cb)
         enabled_cb.stateChanged.connect(lambda state: (
             setattr(concept, 'enabled', bool(state)),
             save_command(),
@@ -192,9 +205,11 @@ class PySide6ConceptWidgetView(BaseConceptWidgetView, QWidget):
         self.ui_state.get_var("enabled")._bind_widget(
             lambda v: enabled_cb.setChecked(bool(v))
         )
+        layout.addWidget(self.name_label)
 
     def configure_element(self):
         self.name_label.setText(self._get_display_name())
+        self.name_label.setToolTip(self._get_display_name())
         image = self._get_preview_image()
         pixmap = QPixmap.fromImage(ImageQt(image.convert("RGBA")))
         self.image_label.setPixmap(pixmap)

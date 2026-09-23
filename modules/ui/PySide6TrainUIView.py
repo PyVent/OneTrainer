@@ -30,25 +30,44 @@ from modules.util.enum.ModelType import ModelType
 from modules.util.enum.TrainingMethod import TrainingMethod
 from modules.util.ui import pyside6_components
 from modules.util.ui.pyside6_navigation import WorkflowNavigation
+from modules.util.ui.pyside6_theme import apply_theme, saved_theme
 from modules.util.ui.pyside6_util import QtABCMeta
 from modules.util.ui.PySide6UIState import PySide6UIState
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
+    QApplication,
     QFileDialog,
     QFormLayout,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
+    QLabel,
     QMainWindow,
     QMessageBox,
     QTabWidget,
+    QVBoxLayout,
     QWidget,
 )
 
 
 class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
+    PAGE_COPY = {
+        "general": ("Training Configuration", "Set paths, monitoring and performance options before training."),
+        "model": ("Model", "Choose the source model, components and output options."),
+        "data": ("Data", "Prepare images and choose how training data is cached."),
+        "concepts": ("Concepts", "Organize datasets and their training settings."),
+        "training": ("Training", "Tune optimization, scheduling and training behavior."),
+        "LoRA": ("LoRA", "Configure adapter training for the selected model."),
+        "embedding": ("Embedding", "Configure embedding training and token behavior."),
+        "additional embeddings": ("Additional Embeddings", "Manage extra embeddings used during training."),
+        "backup": ("Backups", "Control automatic backups and model saves."),
+        "sampling": ("Sampling", "Choose when and how preview images are generated."),
+        "tools": ("Tools", "Open dataset, video, conversion, sampling and profiling tools."),
+        "cloud": ("Cloud", "Configure a remote training instance and connection."),
+    }
+
     def __init__(self):
         QMainWindow.__init__(self)
 
@@ -60,7 +79,7 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         self.controller.view = self
 
         self.setWindowTitle("OneTrainer")
-        self.setWindowIcon(QIcon("resources/icons/icon.png"))
+        self.setWindowIcon(QIcon(str(Path(__file__).resolve().parents[2] / "resources/icons/icon.png")))
         self.resize(1100, 740)
 
         self.status_label = None
@@ -81,33 +100,56 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
 
         central = QWidget(self)
         self.setCentralWidget(central)
-        central_lo = QGridLayout(central)
+        central_lo = QHBoxLayout(central)
         central_lo.setContentsMargins(0, 0, 0, 0)
         central_lo.setSpacing(0)
-        central_lo.setRowStretch(1, 1)
-        central_lo.setColumnStretch(0, 1)
 
-        self.top_bar_component = self._build_top_bar(central)
-        central_lo.addWidget(self.top_bar_component, 0, 0)
+        self.navigation = WorkflowNavigation(central)
+        central_lo.addWidget(self.navigation)
 
-        page_area = QWidget(central)
-        page_layout = QHBoxLayout(page_area)
-        page_layout.setContentsMargins(0, 0, 0, 0)
-        page_layout.setSpacing(0)
+        main_area = QWidget(central)
+        main_layout = QGridLayout(main_area)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        main_layout.setRowStretch(1, 1)
+        main_layout.setColumnStretch(0, 1)
+        central_lo.addWidget(main_area, 1)
 
-        self.navigation = WorkflowNavigation(page_area)
-        page_layout.addWidget(self.navigation)
+        self.top_bar_component = self._build_top_bar(main_area)
+        self.top_bar_component.setObjectName("trainingTopBar")
+        main_layout.addWidget(self.top_bar_component, 0, 0)
 
-        self.tabview = QTabWidget(page_area)
+        page_content = QWidget(main_area)
+        page_content_layout = QVBoxLayout(page_content)
+        page_content_layout.setContentsMargins(0, 0, 0, 0)
+        page_content_layout.setSpacing(0)
+        heading = QWidget(page_content)
+        heading_layout = QVBoxLayout(heading)
+        heading_layout.setContentsMargins(18, 13, 18, 11)
+        heading_layout.setSpacing(2)
+        self.page_heading = QLabel(heading)
+        self.page_heading.setObjectName("pageHeading")
+        self.page_subtitle = QLabel(heading)
+        self.page_subtitle.setObjectName("pageSubtitle")
+        self.page_subtitle.setWordWrap(True)
+        heading_layout.addWidget(self.page_heading)
+        heading_layout.addWidget(self.page_subtitle)
+        page_content_layout.addWidget(heading)
+
+        self.tabview = QTabWidget(page_content)
         self.tabview.tabBar().hide()
-        page_layout.addWidget(self.tabview, 1)
-        central_lo.addWidget(page_area, 1, 0)
+        page_content_layout.addWidget(self.tabview, 1)
+        main_layout.addWidget(page_content, 1, 0)
 
         self.navigation.page_selected.connect(self._show_navigation_page)
+        self.navigation.theme_requested.connect(self._change_theme)
+        self.navigation.help_requested.connect(self.top_bar_component.open_wiki)
+        app = QApplication.instance()
+        self.navigation.set_theme(app.property("onetrainerTheme") or saved_theme())
         self.tabview.currentChanged.connect(self._sync_navigation_selection)
 
-        bottom = self._build_bottom_bar(central)
-        central_lo.addWidget(bottom, 2, 0)
+        bottom = self._build_bottom_bar(main_area)
+        main_layout.addWidget(bottom, 2, 0)
 
         self._create_tabs()
         self._refresh_navigation()
@@ -222,6 +264,7 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
 
     def _build_bottom_bar(self, parent):
         frame = QWidget(parent)
+        frame.setObjectName("trainingBottomBar")
         lo = QGridLayout(frame)
         lo.setColumnStretch(0, 1)
         lo.setColumnStretch(2, 2)
@@ -246,26 +289,42 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         return tab_page
 
     def _configure_general_frame(self, frame):
+        from PySide6.QtCore import QEvent, QObject
+        from PySide6.QtWidgets import QLabel, QScrollArea, QVBoxLayout
+
         lo = pyside6_components._layout(frame)
         self.build_general_tab_content(frame, self.controller, self.ui_state)
 
-        # Keep the shared field builder and its UIState bindings intact. Move
-        # the finished widgets into Qt form layouts so labels and controls can
-        # wrap naturally when the main window is narrowed.
+        # Reuse the bound fields from the shared builder; changing their layout
+        # must not recreate controls, validators, or UIState subscriptions.
         fields = {}
-        groups = (
-            ("Paths and run safety", ((0, 0), (0, 2), (2, 0), (2, 2), (3, 0), (4, 0), (4, 2))),
-            ("Monitoring and validation", ((6, 0), (6, 2), (7, 0), (7, 2), (8, 0), (8, 2))),
-            ("Devices and performance", ((10, 0), (11, 0), (11, 2), (12, 0), (12, 2),
-                                         (13, 0), (13, 2), (14, 0), (14, 2), (15, 0))),
+        sections = (
+            (
+                "Paths and run safety",
+                "Set the workspace and cache locations, then choose how to resume or protect a run.",
+                ((0, 0), (0, 2), (2, 0), (2, 2), (3, 0), (4, 0), (4, 2)),
+            ),
+            (
+                "Monitoring and validation",
+                "Control TensorBoard access and when validation runs.",
+                ((6, 0), (6, 2), (7, 0), (7, 2), (8, 0), (8, 2)),
+            ),
+            (
+                "Devices and performance",
+                "Select compute devices and tune data loading, offloading, and gradient reduction.",
+                ((10, 0), (11, 0), (11, 2), (12, 0), (12, 2), (13, 0), (13, 2),
+                 (14, 0), (14, 2), (15, 0)),
+            ),
         )
-        for _, positions in groups:
+        for _, _, positions in sections:
             for row, col in positions:
                 for offset in (0, 1):
                     item = lo.itemAtPosition(row, col + offset)
                     if item is None or item.widget() is None:
                         raise RuntimeError(f"Missing General field at row {row}, column {col + offset}")
                     fields[row, col + offset] = item.widget()
+        if lo.count() != len(fields):
+            raise RuntimeError("Unexpected widgets in General form")
 
         while lo.count():
             lo.takeAt(0)
@@ -273,19 +332,70 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         lo.setContentsMargins(12, 12, 12, 12)
         lo.setVerticalSpacing(14)
         lo.setColumnStretch(0, 1)
-        for group_row, (title, positions) in enumerate(groups):
-            group = QGroupBox(title, frame)
-            form = QFormLayout(group)
-            form.setContentsMargins(16, 18, 16, 16)
-            form.setHorizontalSpacing(22)
-            form.setVerticalSpacing(10)
-            form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-            form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-            form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
-            for row, col in positions:
-                form.addRow(fields[row, col], fields[row, col + 1])
-            lo.addWidget(group, group_row, 0)
-        lo.setRowStretch(len(groups), 1)
+        cards = []
+        for card_row, (title, description, positions) in enumerate(sections):
+            card = QGroupBox(title, frame)
+            card.setObjectName("overviewCard")
+            body = QVBoxLayout(card)
+            body.setContentsMargins(16, 18, 16, 16)
+            body.setSpacing(10)
+
+            subtitle = QLabel(description, card)
+            subtitle.setObjectName("pageSubtitle")
+            subtitle.setWordWrap(True)
+            body.addWidget(subtitle)
+
+            field_container = QWidget(card)
+            field_grid = QGridLayout(field_container)
+            field_grid.setObjectName("overviewFieldGrid")
+            field_grid.setContentsMargins(0, 0, 0, 0)
+            field_grid.setHorizontalSpacing(22)
+            field_grid.setVerticalSpacing(10)
+            body.addWidget(field_container)
+            pairs = [(fields[row, col], fields[row, col + 1]) for row, col in positions]
+            cards.append((field_grid, pairs))
+            lo.addWidget(card, card_row, 0)
+        lo.setRowStretch(len(cards), 1)
+
+        scroll = frame.parentWidget()
+        while scroll is not None and not isinstance(scroll, QScrollArea):
+            scroll = scroll.parentWidget()
+        active_columns = None
+
+        def arrange_fields():
+            nonlocal active_columns
+            available_width = scroll.viewport().width() if scroll is not None else frame.width()
+            columns = 2 if available_width >= 1180 else 1
+            if columns == active_columns:
+                return
+            for grid, pairs in cards:
+                for label, control in pairs:
+                    grid.removeWidget(label)
+                    grid.removeWidget(control)
+                for col in range(4):
+                    grid.setColumnStretch(col, 1 if col % 2 and col < columns * 2 else 0)
+                for index, (label, control) in enumerate(pairs):
+                    row, pair_col = divmod(index, columns)
+                    grid.addWidget(label, row, pair_col * 2, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+                    grid.addWidget(control, row, pair_col * 2 + 1)
+            active_columns = columns
+            lo.invalidate()
+            frame.updateGeometry()
+            if scroll is not None:
+                scroll.widget().layout().invalidate()
+                scroll.widget().resize(scroll.viewport().width(), scroll.widget().height())
+
+        class _OverviewResizeFilter(QObject):
+            def eventFilter(self, watched, event):
+                if event.type() == QEvent.Type.Resize:
+                    arrange_fields()
+                return False
+
+        frame._overview_resize_filter = _OverviewResizeFilter(frame)
+        frame.installEventFilter(frame._overview_resize_filter)
+        if scroll is not None:
+            scroll.viewport().installEventFilter(frame._overview_resize_filter)
+        arrange_fields()
 
     def _configure_data_frame(self, frame):
         lo = pyside6_components._layout(frame)
@@ -454,6 +564,13 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         current = self.tabview.currentWidget()
         key = next((key for key, page in self._tab_widgets.items() if page is current), None)
         self.navigation.select_page(key)
+        title, subtitle = self.PAGE_COPY.get(key, ("OneTrainer", ""))
+        self.page_heading.setText(title)
+        self.page_subtitle.setText(subtitle)
+
+    def _change_theme(self, theme: str):
+        apply_theme(QApplication.instance(), theme, persist=True)
+        self.navigation.set_theme(theme)
 
     def _show_navigation_page(self, key: str):
         page = self._tab_widgets.get(key)
@@ -563,11 +680,11 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         if not self.training_button:
             return
         styles = {
-            "idle":     ("Start Training", True,  "#198754", "white"),
+            "idle":     ("Start Training", True,  "#245eea", "white"),
             "running":  ("Stop Training",  True,  "#dc3545", "white"),
             "stopping": ("Stopping...",    False, "#dc3545", "white"),
         }
-        text, enabled, bg, fg = styles.get(mode, ("Start Training", True, "#198754", "white"))
+        text, enabled, bg, fg = styles.get(mode, ("Start Training", True, "#245eea", "white"))
         self.training_button.setText(text)
         self.training_button.setEnabled(enabled)
         self.training_button.setStyleSheet(

@@ -4,6 +4,7 @@ from modules.ui.SchedulerParamsWindowController import KvParamsController, Sched
 from modules.util.ui import pyside6_components
 from modules.util.ui.PySide6UIState import PySide6UIState
 
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QDialog, QGridLayout, QLabel, QPushButton, QWidget
 
 
@@ -37,7 +38,12 @@ class PySide6KvWidget(QWidget):
         lo.setColumnStretch(1, 1)
         lo.setColumnStretch(2, 1)
 
-        pyside6_components.colored_icon_button(self, 0, 0, "X", "#C00000", lambda: remove_command(self.i))
+        remove_button = pyside6_components.colored_icon_button(
+            self, 0, 0, "Remove", "#C00000", lambda: remove_command(self.i)
+        )
+        remove_button.setIcon(QIcon())
+        remove_button.setFixedSize(max(76, remove_button.fontMetrics().horizontalAdvance("Remove") + 20), 38)
+        remove_button.setToolTip("Remove scheduler parameter")
 
         # Key
         self.key = pyside6_components.entry(self, 0, 1, self.ui_state, "key",

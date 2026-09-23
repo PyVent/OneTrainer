@@ -75,6 +75,7 @@ class TopBarController:
     def save_to_file(self, name) -> str:
         name = path_util.safe_filename(name)
         path = path_util.canonical_join("training_presets", f"{name}.json")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         write_json_atomic(path, self.train_config.to_settings_dict(secrets=False))
         return path
 

@@ -5,6 +5,7 @@ from modules.util.ui import pyside6_components
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from PySide6.QtCore import QEvent
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QDialog, QGridLayout, QPushButton, QSizePolicy, QWidget
 
 
@@ -72,26 +73,37 @@ class PySide6TimestepDistributionWindowView(BaseTimestepDistributionWindowView, 
             self._reflow_content(event.size().width())
         return super().eventFilter(watched, event)
 
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.PaletteChange and hasattr(self, "_canvas"):
+            self._apply_chart_palette()
+            self._canvas.draw_idle()
+
     def _reflow_content(self, width: int):
         self._reflow_fields(width)
         mode = "wide" if width >= self.WIDE_VIEWPORT_WIDTH else "compact"
-        if mode == self._layout_mode:
-            return
-
         layout = self._content_layout
-        layout.removeWidget(self._fields_frame)
-        layout.removeWidget(self._preview_frame)
-        if mode == "wide":
-            layout.setColumnStretch(0, 0)
-            layout.setColumnStretch(1, 1)
-            layout.addWidget(self._fields_frame, 0, 0)
-            layout.addWidget(self._preview_frame, 0, 1)
-        else:
-            layout.setColumnStretch(0, 1)
-            layout.setColumnStretch(1, 0)
-            layout.addWidget(self._fields_frame, 0, 0)
-            layout.addWidget(self._preview_frame, 1, 0)
-        self._layout_mode = mode
+        if mode != self._layout_mode:
+            layout.removeWidget(self._fields_frame)
+            layout.removeWidget(self._preview_frame)
+            if mode == "wide":
+                layout.setColumnStretch(0, 0)
+                layout.setColumnStretch(1, 1)
+                layout.addWidget(self._fields_frame, 0, 0)
+                layout.addWidget(self._preview_frame, 0, 1)
+            else:
+                layout.setColumnStretch(0, 1)
+                layout.setColumnStretch(1, 0)
+                layout.addWidget(self._fields_frame, 0, 0)
+                layout.addWidget(self._preview_frame, 1, 0)
+            self._layout_mode = mode
+
+        # QScrollArea may retain the old content width after the fields switch
+        # from two columns to one. Bring it back to the viewport immediately.
+        self._fields_layout.activate()
+        layout.activate()
+        content = self._scroll.widget()
+        content.resize(max(width, content.minimumSizeHint().width()), content.height())
 
     def _reflow_fields(self, width: int):
         stacked = width < 600
@@ -117,4 +129,20 @@ class PySide6TimestepDistributionWindowView(BaseTimestepDistributionWindowView, 
     def _update_preview(self):
         self._ax.cla()
         self._ax.hist(self._controller.generate_preview_data(), bins=1000, range=(0, 999))
+        self._apply_chart_palette()
         self._canvas.draw()
+
+    def _apply_chart_palette(self):
+        palette = self.palette()
+        background = palette.color(QPalette.ColorRole.Window).name()
+        foreground = palette.color(QPalette.ColorRole.WindowText).name()
+        accent = palette.color(QPalette.ColorRole.Highlight).name()
+        self._canvas.figure.set_facecolor(background)
+        self._ax.set_facecolor(background)
+        for patch in self._ax.patches:
+            patch.set_facecolor(accent)
+        for spine in self._ax.spines.values():
+            spine.set_color(foreground)
+        self._ax.tick_params(colors=foreground)
+        self._ax.xaxis.label.set_color(foreground)
+        self._ax.yaxis.label.set_color(foreground)

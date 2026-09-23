@@ -57,7 +57,7 @@ class DataAndBackupLayoutTest(unittest.TestCase):
         self.assertEqual([group.layout().rowCount() for group in groups], [5, 4])
         self.assertEqual(
             [button.text() for group in groups for button in group.findChildren(QPushButton)],
-            ["backup now", "save now"],
+            ["Backup Now", "Save Now"],
         )
 
         filename = groups[1].layout().itemAt(2, QFormLayout.ItemRole.FieldRole).widget()
