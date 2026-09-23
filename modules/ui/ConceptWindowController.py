@@ -90,7 +90,8 @@ class ConceptWindowController:
             return "[Invalid file encoding. This should not happen, please report this issue]"
 
     def get_preview_image(self, image_preview_file_index: int, preview_augmentations: bool):
-        preview_image_path = "resources/icons/icon.png"
+        preview_image_path = str(pathlib.Path(__file__).resolve().parents[2] / "resources" / "icons" / "icon.png")
+        placeholder_path = preview_image_path
         file_index = -1
         glob_pattern = "**/*.*" if self.concept.include_subdirectories else "*.*"
 
@@ -107,6 +108,7 @@ class ConceptWindowController:
                     if file_index == image_preview_file_index:
                         break
 
+        self.preview_is_placeholder = preview_image_path == placeholder_path
         image = load_image(preview_image_path, 'RGB')
         image_tensor = functional.to_tensor(image)
 
@@ -134,7 +136,7 @@ class ConceptWindowController:
             prompt_output = self._read_text_file_for_preview(str(file_path), preview_augmentations) if file_path else "[Empty prompt]"
 
         modules = []
-        if preview_augmentations:
+        if preview_augmentations and not self.preview_is_placeholder:
             input_module = InputPipelineModule({
                 'true': True,
                 'image': image_tensor,
@@ -222,7 +224,9 @@ class ConceptWindowController:
             mask_tensor = data['mask']
             prompt_output = data['prompt']
 
-        filename_output = os.path.basename(preview_image_path)
+        filename_output = "No images in this concept yet" if self.preview_is_placeholder else os.path.basename(preview_image_path)
+        if self.preview_is_placeholder:
+            prompt_output = ""
 
         mask_tensor = torch.clamp(mask_tensor, 0.3, 1)
         image_tensor = image_tensor * mask_tensor

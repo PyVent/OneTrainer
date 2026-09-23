@@ -10,9 +10,10 @@ from modules.util.path_util import supported_image_extensions, supported_video_e
 from modules.util.ui.pyside6_validation import PySide6FieldValidator, PySide6PathValidator
 from modules.util.ui.UIState import BaseUIState
 
-from PySide6.QtCore import QSize, Qt, QTimer
-from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap, QWheelEvent
+from PySide6.QtCore import QPoint, QSize, Qt, QTimer
+from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPen, QPixmap, QWheelEvent
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QCheckBox,
     QComboBox,
     QFileDialog,
@@ -591,7 +592,8 @@ class NoScrollComboBox(QComboBox):
             return
 
         popup = self.view().window()
-        screen = self.screen()
+        anchor = self.mapToGlobal(QPoint(0, 0))
+        screen = QGuiApplication.screenAt(anchor) or self.screen()
         available = screen.availableGeometry() if screen else None
         width_limit = min(COMBO_POPUP_MAX_WIDTH, available.width() - 24) if available else COMBO_POPUP_MAX_WIDTH
         content_width = max(
@@ -611,9 +613,60 @@ class NoScrollComboBox(QComboBox):
         height = visible_rows * row_height + chrome_height + 10
         if available:
             height = min(height, available.height() - 24)
-        popup.resize(width, height)
-        if available and popup.x() + width > available.right() + 1:
-            popup.move(max(available.left(), available.right() + 1 - width), popup.y())
+        below = self.mapToGlobal(QPoint(0, self.height()))
+        if available:
+            room_below = max(0, available.bottom() + 1 - below.y() - 4)
+            room_above = max(0, anchor.y() - available.top() - 4)
+            open_below = room_below >= height or room_below >= room_above
+            height = min(height, room_below if open_below else room_above)
+            x = max(available.left(), min(anchor.x(), available.right() + 1 - width))
+            y = below.y() + 2 if open_below else anchor.y() - height - 2
+        else:
+            x, y = anchor.x(), below.y() + 2
+        popup.resize(width, max(row_height + chrome_height, height))
+        popup.move(x, y)
+        if self.currentIndex() >= 0:
+            self.view().scrollTo(
+                self.model().index(self.currentIndex(), 0),
+                QAbstractItemView.ScrollHint.PositionAtCenter,
+            )
+
+
+class _AdvancedOptionsFrame(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._combo = None
+        self._button = None
+        self._stacked = False
+
+    def set_controls(self, combo: QComboBox, button: QPushButton):
+        self._combo = combo
+        self._button = button
+        combo.currentTextChanged.connect(self._arrange)
+        self._arrange()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._arrange()
+
+    def _arrange(self, *_):
+        if self._combo is None or self._button is None:
+            return
+        text_width = self._combo.fontMetrics().horizontalAdvance(self._combo.currentText())
+        minimum_inline_width = max(150, text_width + 52) + self._button.width() + 6
+        stacked = self.width() < minimum_inline_width
+        if stacked == self._stacked:
+            return
+        layout = self.layout()
+        layout.removeWidget(self._button)
+        if stacked:
+            layout.addWidget(self._button, 1, 0, Qt.AlignmentFlag.AlignRight)
+        else:
+            layout.addWidget(self._button, 0, 1)
+        self._stacked = stacked
+        self.setMinimumHeight(CONTROL_HEIGHT * (2 if stacked else 1) + (6 if stacked else 0))
+        layout.activate()
+        self.updateGeometry()
 
 
 def options(
@@ -667,13 +720,17 @@ def options_adv(
         command: Callable[[str], None] | None = None,
         adv_command: Callable[[], None] | None = None,
 ) -> tuple[QWidget, dict]:
-    frame = QWidget(master)
+    frame = _AdvancedOptionsFrame(master)
     frame_lo = QGridLayout(frame)
     frame_lo.setContentsMargins(0, 0, 0, 0)
+    frame_lo.setSpacing(6)
     frame_lo.setColumnStretch(0, 1)
     _add(_layout(master), frame, row, column, sticky="new")
 
     combo = options(frame, 0, 0, values, ui_state, var_name, command=command)
+    # The advanced button needs its own width; allow the combo to contract in
+    # a narrow training column instead of drawing its arrow under the button.
+    combo.setMinimumWidth(80)
 
     adv_btn = QPushButton("Edit", frame)
     adv_btn.setFixedSize(58, CONTROL_HEIGHT)
@@ -682,6 +739,7 @@ def options_adv(
     if adv_command:
         adv_btn.clicked.connect(adv_command)
     _add(frame_lo, adv_btn, 0, 1, sticky="nsew")
+    frame.set_controls(combo, adv_btn)
 
     if command:
         command(ui_state.get_var(var_name).get())
@@ -868,7 +926,7 @@ def section_frame(parent: QWidget, row: int, col: int = 0, colspan: int = 1) -> 
     frame.setFrameShape(QFrame.Shape.StyledPanel)
     _layout(parent).addWidget(frame, row, col, 1, colspan)
     frame_lo = _layout(frame)
-    frame_lo.setColumnStretch(0, 1)
+    frame_lo.setColumnStretch(1, 1)
     frame_lo.setContentsMargins(PAD, PAD, PAD, PAD)
     return frame
 

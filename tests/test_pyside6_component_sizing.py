@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QPoint
 from PySide6.QtWidgets import QApplication, QFileDialog, QLineEdit, QPushButton, QWidget
 
 from modules.util.config.TrainConfig import TrainConfig
@@ -117,9 +118,9 @@ class ComponentSizingTest(unittest.TestCase):
     def test_long_popup_is_bounded_and_selection_stays_bound(self):
         frame = QWidget()
         self.addCleanup(frame.close)
-        state = _ChoiceState("short")
-        changed = Mock()
         values = ["short"] + [f"long {index} " + "word " * 100 for index in range(80)]
+        state = _ChoiceState(values[60])
+        changed = Mock()
         combo = components.options(frame, 0, 0, values, state, "choice", command=changed)
         frame.resize(320, 100)
         frame.show()
@@ -138,6 +139,11 @@ class ComponentSizingTest(unittest.TestCase):
             combo.view().viewport().height(),
             components.COMBO_POPUP_MAX_ROWS * combo.view().sizeHintForRow(0),
         )
+        self.assertGreaterEqual(
+            popup.y(), combo.mapToGlobal(QPoint(0, combo.height())).y()
+        )
+        selected = combo.view().visualRect(combo.model().index(combo.currentIndex(), 0))
+        self.assertTrue(selected.intersects(combo.view().viewport().rect()))
         combo.hidePopup()
 
         combo.setCurrentIndex(1)

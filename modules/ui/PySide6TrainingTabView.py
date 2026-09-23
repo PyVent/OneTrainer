@@ -156,8 +156,17 @@ class PySide6TrainingTabView(BaseTrainingTabView, QWidget, metaclass=QtABCMeta):
         for index in range(3):
             layout.setColumnStretch(index, 1 if index < count else 0)
 
-        for index, column in enumerate(self._columns):
-            layout.addWidget(column, index // count, index % count)
+        if count == 2:
+            # The middle source column is usually the tallest. Let it span
+            # both rows so the third column begins directly below the first.
+            # Placing three whole columns in a regular 2x2 grid left a large
+            # empty rectangle before the third column.
+            layout.addWidget(self._columns[0], 0, 0)
+            layout.addWidget(self._columns[1], 0, 1, 2, 1)
+            layout.addWidget(self._columns[2], 1, 0)
+        else:
+            for index, column in enumerate(self._columns):
+                layout.addWidget(column, index // count, index % count)
 
         self._column_count = count
 

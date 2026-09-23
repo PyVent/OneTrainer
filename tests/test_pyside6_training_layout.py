@@ -3,7 +3,7 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QGroupBox, QLineEdit
+from PySide6.QtWidgets import QApplication, QComboBox, QGroupBox, QLineEdit, QPushButton
 
 from modules.ui.PySide6TrainingTabView import PySide6TrainingTabView
 from modules.ui.TrainingTabController import TrainingTabController
@@ -35,7 +35,7 @@ class TrainingLayoutTest(unittest.TestCase):
              "Noise and timesteps", "Masked training", "Loss", "Layer selection"},
         )
 
-        for width, expected_count in ((1600, 3), (1000, 2), (684, 1), (650, 1), (1600, 3)):
+        for width, expected_count in ((1600, 3), (1230, 3), (1000, 2), (684, 1), (650, 1), (1600, 3)):
             with self.subTest(width=width):
                 view.resize(width, 700)
                 self.app.processEvents()
@@ -48,6 +48,14 @@ class TrainingLayoutTest(unittest.TestCase):
                     layout_index = view._column_layout.indexOf(column)
                     row, col, _, _ = view._column_layout.getItemPosition(layout_index)
                     self.assertEqual((row, col), divmod(index, expected_count))
+                if expected_count == 2:
+                    gap = columns[2].y() - (columns[0].y() + columns[0].height())
+                    self.assertLessEqual(gap, 2 * view._column_layout.spacing() + 1)
+                optimization = next(g for g in view.findChildren(QGroupBox) if g.title() == "Optimization")
+                optimizer = optimization.findChildren(QComboBox)[0]
+                settings = next(b for b in optimization.findChildren(QPushButton) if b.text() == "Settings")
+                self.assertIs(optimizer.parentWidget(), settings.parentWidget())
+                self.assertFalse(optimizer.geometry().intersects(settings.geometry()))
 
         learning_rate.setText("0.0002")
         self.assertIsNone(learning_rate._validator.flush())

@@ -89,6 +89,20 @@ class NestedVisualLayoutTest(unittest.TestCase):
         self.app.processEvents()
         self.assertEqual(tabs.widget(3).horizontalScrollBar().maximum(), 0)
 
+    def test_empty_concept_preview_keeps_logo_transparency(self):
+        config = TrainConfig.default_values()
+        concept = ConceptConfig.default_values()
+        controller = ConceptWindowController(config, concept)
+        controller.auto_update_concept_stats = Mock()
+        view = PySide6ConceptWindowView(
+            None, controller,
+            PySide6UIState(concept), PySide6UIState(concept.image), PySide6UIState(concept.text),
+        )
+        self.addCleanup(view.close)
+        self.assertTrue(controller.preview_is_placeholder)
+        self.assertEqual(view._filename_label.text(), "No images in this concept yet")
+        self.assertTrue(view._image_label.pixmap().hasAlphaChannel())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -86,6 +86,10 @@ def apply_theme(app: QApplication, theme: str, *, persist: bool = False,
         QLabel#pageHeading {{ font-size: 22px; font-weight: 700; }}
         QLabel#pageSubtitle {{ color: {color['muted']}; font-size: 12px; }}
         QLabel#errorStatus {{ color: {color['danger_text']}; }}
+        QLabel#conceptPreview {{
+            background: {color['surface']}; border: 1px solid {color['border']};
+            border-radius: 8px;
+        }}
         QLabel#emptyState {{
             color: {color['muted']}; background: {color['surface']};
             border: 1px dashed {color['border']}; border-radius: 9px;

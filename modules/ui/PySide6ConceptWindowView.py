@@ -1,4 +1,5 @@
 import threading
+from pathlib import Path
 
 from modules.ui.BaseConceptWindowView import BaseConceptWindowView
 from modules.ui.ConceptWindowController import ConceptWindowController
@@ -94,8 +95,10 @@ class PySide6ConceptWindowView(BaseConceptWindowView, QDialog):
         pb_lo = QGridLayout(preview_panel)
 
         self._image_label = QLabel(preview_panel)
+        self._image_label.setObjectName("conceptPreview")
+        self._image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._image_label.setFixedSize(300, 300)
-        self._image_label.setPixmap(QPixmap.fromImage(ImageQt(image_preview.convert("RGBA"))).scaled(300, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        self._image_label.setPixmap(self._preview_pixmap(image_preview))
         pb_lo.addWidget(self._image_label, 0, 0, 1, 3)
 
         prev_btn = QPushButton("Previous", preview_panel)
@@ -237,11 +240,17 @@ class PySide6ConceptWindowView(BaseConceptWindowView, QDialog):
         image_preview, filename_preview, caption_preview = self.controller.get_preview_image(
             self.image_preview_file_index, self._preview_augmentations
         )
-        self._image_label.setPixmap(
-            QPixmap.fromImage(ImageQt(image_preview.convert("RGBA"))).scaled(300, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        )
+        self._image_label.setPixmap(self._preview_pixmap(image_preview))
         self._filename_label.setText(filename_preview)
         self._caption_box.setPlainText(caption_preview)
+
+    def _preview_pixmap(self, image):
+        if getattr(self.controller, "preview_is_placeholder", False):
+            icon = Path(__file__).resolve().parents[2] / "resources" / "icons" / "icon.png"
+            return QPixmap(str(icon)).scaled(250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        return QPixmap.fromImage(ImageQt(image.convert("RGBA"))).scaled(
+            300, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation
+        )
 
     def _cleanup(self):
         # stop the background scan thread (reuses the Abort Scan mechanism) so it
