@@ -17,7 +17,7 @@ class TopBarController:
         self.train_config = config
 
     def get_model_types(self) -> list[tuple[str, ModelType]]:
-        model_types = [  #TODO simplify
+        return [  #TODO simplify
             ("SD1.5", ModelType.STABLE_DIFFUSION_15),
             ("SD1.5 Inpainting", ModelType.STABLE_DIFFUSION_15_INPAINTING),
             ("SD2.0", ModelType.STABLE_DIFFUSION_20),
@@ -39,15 +39,12 @@ class TopBarController:
             ("HiDream Full", ModelType.HI_DREAM_FULL),
             ("Chroma1", ModelType.CHROMA_1),
             ("QwenImage", ModelType.QWEN),
+            ("Anima", ModelType.ANIMA),
+            ("Krea 2", ModelType.KREA_2),
             ("Z-Image", ModelType.Z_IMAGE),
+            ("Ernie Image", ModelType.ERNIE),
+            ("Ideogram 4", ModelType.IDEOGRAM_4),
         ]
-        model_types.extend((label, ModelType[name]) for label, name in (
-            ("Anima", "ANIMA"),
-            ("Krea 2", "KREA_2"),
-            ("Ernie Image", "ERNIE"),
-            ("Ideogram 4", "IDEOGRAM_4"),
-        ) if name in ModelType.__members__)
-        return model_types
 
     def get_training_methods(self, model_type: ModelType) -> list[tuple[str, TrainingMethod]]:
         labels = {

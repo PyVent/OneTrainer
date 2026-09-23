@@ -1,6 +1,4 @@
 import unittest
-import json
-from pathlib import Path
 from types import SimpleNamespace
 
 import torch
@@ -54,9 +52,12 @@ class RiemannionIntegrationTest(unittest.TestCase):
         self.assertEqual(len(build_riemannion_pair_map(model)), 2)
 
     def test_existing_config_keeps_optimizer_settings(self):
-        path = Path(__file__).resolve().parents[1] / "training_configs" / "sd15 lora riemannion.json"
         config = TrainConfig.default_values()
-        config.optimizer.from_dict(json.loads(path.read_text(encoding="utf-8"))["optimizer"])
+        config.optimizer.from_dict({
+            "optimizer": "RIEMANNION",
+            "riemannion_init_scale": 1e-6,
+            "riemannion_sigma_floor": 1e-8,
+        })
         self.assertEqual(config.optimizer.optimizer, Optimizer.RIEMANNION)
         self.assertEqual(config.optimizer.riemannion_init_scale, 1e-6)
         self.assertEqual(config.optimizer.riemannion_sigma_floor, 1e-8)

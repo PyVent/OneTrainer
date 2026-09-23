@@ -38,9 +38,12 @@ def make_lora_model_saver(
 
             if embedding_saver_class is not None:
                 embedding_model_saver = embedding_saver_class()
-                if not model.train_config.bundle_additional_embeddings or output_model_format == ModelFormat.INTERNAL:
-                    embedding_format = ModelFormat.INTERNAL if output_model_format == ModelFormat.INTERNAL else ModelFormat.SAFETENSORS
-                    embedding_model_saver.save_multiple(model, embedding_format, output_model_destination, dtype)
+                if ((model.train_config is not None and not model.train_config.bundle_additional_embeddings) \
+                    or output_model_format == ModelFormat.INTERNAL
+                ):
+                    embedding_model_format = ModelFormat.INTERNAL if output_model_format == ModelFormat.INTERNAL \
+                        else ModelFormat.SAFETENSORS
+                    embedding_model_saver.save_multiple(model, embedding_model_format, output_model_destination, dtype)
 
             if output_model_format == ModelFormat.INTERNAL:
                 self._save_internal_data(model, output_model_destination)

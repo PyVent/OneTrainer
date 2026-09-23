@@ -46,6 +46,7 @@ class CloudSecretsConfig(BaseConfig):
         password = getattr(self, "password", "").strip()
         if password:
             kwargs["password"] = password
+        # Never query the ssh-agent: a broken agent can make paramiko's Agent() raise and abort the connect.
         kwargs["allow_agent"] = False
         return kwargs
 

@@ -1,6 +1,5 @@
 import modules.util.multi_gpu_util as multi
 from modules.model.BaseModel import BaseModel
-from modules.util import create
 from modules.util.config.TrainConfig import TrainConfig, TrainOptimizerConfig
 from modules.util.enum.Optimizer import Optimizer
 from modules.util.NamedParameterGroup import NamedParameterGroupCollection
@@ -65,6 +64,8 @@ def init_model_parameters(
             and model.train_config.optimizer.MuonWithAuxAdam:
         print("INFO: Creating layer keys for MuonWithAuxAdam.")
         layer_key_fn = build_muon_adam_key_fn(model, model.train_config)
+
+    from modules.util import create
 
     model.optimizer = create.create_optimizer(
         parameters, model.optimizer_state_dict, model.train_config, layer_key_fn,
@@ -164,7 +165,7 @@ OPTIMIZER_DEFAULT_PARAMETERS = {
         "muon_adam_lr": 3e-4,
         "muon_te1_adam_lr": None,
         "muon_te2_adam_lr": None,
-        "muon_adam_config": None,
+        "muon_adam_config": {},
     },
     Optimizer.RIEMANNION: {
         "momentum": 0.9,
@@ -468,20 +469,16 @@ OPTIMIZER_DEFAULT_PARAMETERS = {
         "eps": 1e-8,
         "cautious_wd": False,
         "weight_decay": 0.0,
-        "use_bias_correction": True,
         "nnmf_factor": False,
         "stochastic_rounding": True,
         "compile": False,
         "fused_back_pass": False,
         "use_atan2": False,
-        "cautious_mask": False,
-        "grams_moment": False,
         "orthogonal_gradient": False,
         "use_AdEMAMix": False,
         "beta3_ema": 0.9999,
         "alpha": 5,
         "kourkoutas_beta": False,
-        "k_warmup_steps": None,
     },
     Optimizer.ADOPT_ADV: {
         "beta1": 0.9,
@@ -493,9 +490,7 @@ OPTIMIZER_DEFAULT_PARAMETERS = {
         "stochastic_rounding": True,
         "compile": False,
         "fused_back_pass": False,
-        "use_atan2": False,
-        "cautious_mask": False,
-        "grams_moment": False,
+        "use_atan2": True,
         "orthogonal_gradient": False,
         "use_AdEMAMix": False,
         "beta3_ema": 0.9999,
@@ -503,7 +498,6 @@ OPTIMIZER_DEFAULT_PARAMETERS = {
         "Simplified_AdEMAMix": False,
         "alpha_grad": 100.0,
         "kourkoutas_beta": False,
-        "k_warmup_steps": None,
     },
     Optimizer.PRODIGY_ADV: {
         "beta1": 0.9,
@@ -523,8 +517,6 @@ OPTIMIZER_DEFAULT_PARAMETERS = {
         "prodigy_steps": 0,
         "d_limiter": False,
         "use_atan2": False,
-        "cautious_mask": False,
-        "grams_moment": False,
         "orthogonal_gradient": False,
         "use_AdEMAMix": False,
         "beta3_ema": 0.9999,
@@ -532,33 +524,14 @@ OPTIMIZER_DEFAULT_PARAMETERS = {
         "Simplified_AdEMAMix": False,
         "alpha_grad": 100.0,
         "kourkoutas_beta": False,
-        "k_warmup_steps": None,
     },
-    Optimizer.SIMPLIFIED_AdEMAMix: {
-        "beta1": 0.99,
-        "beta2": 0.99,
-        "eps": 1e-8,
+    Optimizer.SIGNSGD_ADV: {
+        "momentum": 0.95,
         "cautious_wd": False,
         "weight_decay": 0.0,
-        "alpha_grad": 100.0,
-        "beta1_warmup": None,
-        "min_beta1": 0.9,
-        "use_bias_correction": True,
         "nnmf_factor": False,
         "stochastic_rounding": True,
         "compile": False,
-        "fused_back_pass": False,
-        "orthogonal_gradient": False,
-        "kourkoutas_beta": False,
-        "k_warmup_steps": None,
-    },
-    Optimizer.SIGNSGD_ADV: {
-        "momentum": 0.99,
-        "cautious_wd": False,
-        "weight_decay": 0.0,
-        "nnmf_factor": False,
-        "stochastic_rounding": True,
-        "compiled_optimizer": False,
         "fused_back_pass": False,
         "orthogonal_gradient": False,
         "Simplified_AdEMAMix": False,
@@ -574,31 +547,7 @@ OPTIMIZER_DEFAULT_PARAMETERS = {
         "stochastic_rounding": True,
         "compile": False,
         "fused_back_pass": False,
-        "cautious_mask": False,
         "orthogonal_gradient": False,
-        "kappa_p": 1.0,
-        "auto_kappa_p": True,
-    },
-    Optimizer.LION_PRODIGY_ADV: {
-        "beta1": 0.9,
-        "beta2": 0.99,
-        "beta3": None,
-        "cautious_wd": False,
-        "weight_decay": 0.0,
-        "clip_threshold": None,
-        "nnmf_factor": False,
-        "stochastic_rounding": True,
-        "compile": False,
-        "fused_back_pass": False,
-        "d0": 1e-6,
-        "d_coef": 1.0,
-        "growth_rate": float('inf'),
-        "slice_p": 11,
-        "prodigy_steps": 0,
-        "d_limiter": True,
-        "cautious_mask": False,
-        "orthogonal_gradient": False,
-        "kappa_p": 1.0,
         "auto_kappa_p": True,
     },
     Optimizer.MUON_ADV: {
@@ -625,10 +574,9 @@ OPTIMIZER_DEFAULT_PARAMETERS = {
         "alpha_grad": 100.0,
         "normuon_variant": True,
         "beta2_normuon": 0.95,
-        "normuon_eps": 1e-8,
         "orthogonal_gradient": False,
         "approx_mars": False,
-        "muon_adam_config": None,
+        "muon_adam_config": {},
     },
     Optimizer.ADAMUON_ADV: {
         "beta1": 0.95,
@@ -658,7 +606,7 @@ OPTIMIZER_DEFAULT_PARAMETERS = {
         "normuon_variant": True,
         "orthogonal_gradient": False,
         "approx_mars": False,
-        "muon_adam_config": None,
+        "muon_adam_config": {},
     },
     Optimizer.ADABELIEF: {
         "beta1": 0.9,

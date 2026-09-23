@@ -9,24 +9,12 @@ from modules.util.NamedParameterGroup import NamedParameterGroupCollection
 from modules.util.optimizer_util import init_model_parameters
 from modules.util.TrainProgress import TrainProgress
 
-import torch
 
-
+@factory.register(BaseModelSetup, ModelType.PIXART_ALPHA, TrainingMethod.EMBEDDING)
+@factory.register(BaseModelSetup, ModelType.PIXART_SIGMA, TrainingMethod.EMBEDDING)
 class PixArtAlphaEmbeddingSetup(
     BasePixArtAlphaSetup,
 ):
-    def __init__(
-            self,
-            train_device: torch.device,
-            temp_device: torch.device,
-            debug_mode: bool,
-    ):
-        super().__init__(
-            train_device=train_device,
-            temp_device=temp_device,
-            debug_mode=debug_mode,
-        )
-
     def create_parameters(
             self,
             model: PixArtAlphaModel,
@@ -58,12 +46,12 @@ class PixArtAlphaEmbeddingSetup(
     ):
         model.text_encoder.get_input_embeddings().to(dtype=config.embedding_weight_dtype.torch_dtype())
 
-        self._remove_added_embeddings_from_tokenizer(model.tokenizer)
         self._setup_embeddings(model, config)
         self._setup_embedding_wrapper(model, config)
-        self.__setup_requires_grad(model, config)
 
-        init_model_parameters(model, self.create_parameters(model, config), self.train_device)
+        params = self.create_parameters(model, config)
+        self.__setup_requires_grad(model, config)
+        init_model_parameters(model, params, self.train_device)
 
     def setup_train_device(
             self,
@@ -72,9 +60,10 @@ class PixArtAlphaEmbeddingSetup(
     ):
         vae_on_train_device = self.debug_mode
 
-        model.text_encoder_to(self.train_device)
-        model.vae_to(self.train_device if vae_on_train_device else self.temp_device)
-        model.transformer_to(self.train_device)
+        parts = ["transformer", "text_encoder"]
+        if vae_on_train_device:
+            parts.append("vae")
+        model.materialize_only(*parts)
 
         model.text_encoder.eval()
         model.vae.eval()
@@ -90,6 +79,3 @@ class PixArtAlphaEmbeddingSetup(
             self._normalize_output_embeddings(model.all_text_encoder_embeddings())
             model.embedding_wrapper.normalize_embeddings()
         self.__setup_requires_grad(model, config)
-
-factory.register(BaseModelSetup, PixArtAlphaEmbeddingSetup, ModelType.PIXART_ALPHA, TrainingMethod.EMBEDDING)
-factory.register(BaseModelSetup, PixArtAlphaEmbeddingSetup, ModelType.PIXART_SIGMA, TrainingMethod.EMBEDDING)
