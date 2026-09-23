@@ -136,6 +136,8 @@ Contributions are always welcome in any form. For new functionality please open 
 Before you start looking at the code, I recommend reading about the project structure [here](docs/ProjectStructure.md).
 For in depth discussions, you should consider joining the [Discord](https://discord.gg/KwgcQd5scF) server.
 
+For branches and pull requests in this fork, see the [branch workflow](docs/BranchWorkflow.md).
+
 You also **NEED** to **install the required developer dependencies** for your current user and enable the Git commit hooks, via the following commands (works on all platforms; Windows, Linux and Mac):
 
 > [!IMPORTANT]

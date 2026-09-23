@@ -10,11 +10,13 @@ Please read docs/Contributing.md / docs/ProjectStructure.md for the project guid
 ## Test plan
 
 <!--
-OneTrainer has no automated test suite. Manual verification is expected.
+ The lightweight smoke check runs on each pull request to main. Manual verification
+ is still expected for UI and training changes.
 Describe what you actually did, not what you "would do".
 -->
 
-- [ ] `pre-commit run --all-files` passes
+- [ ] `smoke` check passes
+- [ ] Ran `pre-commit` on changed files (or explained why it does not apply)
 - [ ] Launched the affected UI or script and exercised the change
 - [ ] Tested with at least one real preset / config when relevant (note which: ____)
 

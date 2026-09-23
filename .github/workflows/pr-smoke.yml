@@ -1,0 +1,29 @@
+name: PR smoke
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: smoke
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Check Python syntax
+        run: python -m compileall -q modules scripts
+      - name: Check Qt entrypoints
+        run: python -m unittest discover -s tests -p test_qt_only_interface.py -v
+      - name: Check training UI lifecycle
+        run: python -m unittest discover -s tests -p test_train_ui_lifecycle.py -v
+      - name: Check TensorBoard launch
+        run: python -m unittest discover -s tests -p test_tensorboard_launch.py -v
