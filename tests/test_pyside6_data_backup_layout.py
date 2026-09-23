@@ -6,7 +6,7 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QCoreApplication, QEvent
-from PySide6.QtWidgets import QApplication, QCheckBox, QFormLayout, QGroupBox, QLineEdit, QPushButton
+from PySide6.QtWidgets import QApplication, QCheckBox, QGridLayout, QGroupBox, QLineEdit, QPushButton
 
 from modules.ui.PySide6TrainUIView import PySide6TrainView
 from modules.util.enum.TrainingMethod import TrainingMethod
@@ -36,9 +36,10 @@ class DataAndBackupLayoutTest(unittest.TestCase):
         page = self.view._tab_widgets["data"]
         groups = page.findChildren(QGroupBox)
         self.assertEqual([group.title() for group in groups], ["Image preparation", "Latent cache"])
+        self.assertTrue(all(isinstance(group.layout(), QGridLayout) for group in groups))
         self.assertEqual([group.layout().rowCount() for group in groups], [1, 2])
 
-        checkbox = groups[0].layout().itemAt(0, QFormLayout.ItemRole.FieldRole).widget()
+        checkbox = groups[0].layout().itemAtPosition(0, 1).widget()
         self.assertIsInstance(checkbox, QCheckBox)
         var = self.view.ui_state.get_var("aspect_ratio_bucketing")
         original = bool(var.get())
@@ -60,7 +61,7 @@ class DataAndBackupLayoutTest(unittest.TestCase):
             ["Backup Now", "Save Now"],
         )
 
-        filename = groups[1].layout().itemAt(2, QFormLayout.ItemRole.FieldRole).widget()
+        filename = groups[1].layout().itemAtPosition(2, 1).widget()
         self.assertIsInstance(filename, QLineEdit)
         var = self.view.ui_state.get_var("save_filename_prefix")
         original = str(var.get())

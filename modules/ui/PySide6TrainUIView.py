@@ -39,7 +39,6 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
-    QFormLayout,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -160,8 +159,9 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         self.profiling_window = self._profiling_controller.create_window(self, PySide6ProfilingWindowView)
 
         self.controller._check_start_always_on_tensorboard()
-        self.workspace_dir_trace_id = self.ui_state.add_var_trace(
-            "workspace_dir", self.controller._on_workspace_dir_change_trace
+        self._workspace_dir_var = self.ui_state.get_var("workspace_dir")
+        self._workspace_dir_subscription_id = self._workspace_dir_var.subscribe(
+            lambda _: self.controller._on_workspace_dir_change_trace(), owner=self
         )
 
     def closeEvent(self, event):
@@ -175,7 +175,7 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
             return
         self.top_bar_component.save_default()
         self.controller._stop_always_on_tensorboard()
-        self.ui_state.remove_var_trace("workspace_dir", self.workspace_dir_trace_id)
+        self._workspace_dir_var.unsubscribe(self._workspace_dir_subscription_id)
         event.accept()
 
     # --- BaseTrainUIView abstract method implementations ---
@@ -293,47 +293,29 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         from PySide6.QtWidgets import QLabel, QScrollArea, QVBoxLayout
 
         lo = pyside6_components._layout(frame)
-        self.build_general_tab_content(frame, self.controller, self.ui_state)
-
-        # Reuse the bound fields from the shared builder; changing their layout
-        # must not recreate controls, validators, or UIState subscriptions.
-        fields = {}
         sections = (
             (
                 "Paths and run safety",
                 "Set the workspace and cache locations, then choose how to resume or protect a run.",
-                ((0, 0), (0, 2), (2, 0), (2, 2), (3, 0), (4, 0), (4, 2)),
+                7,
             ),
             (
                 "Monitoring and validation",
                 "Control TensorBoard access and when validation runs.",
-                ((6, 0), (6, 2), (7, 0), (7, 2), (8, 0), (8, 2)),
+                6,
             ),
             (
                 "Devices and performance",
                 "Select compute devices and tune data loading, offloading, and gradient reduction.",
-                ((10, 0), (11, 0), (11, 2), (12, 0), (12, 2), (13, 0), (13, 2),
-                 (14, 0), (14, 2), (15, 0)),
+                10,
             ),
         )
-        for _, _, positions in sections:
-            for row, col in positions:
-                for offset in (0, 1):
-                    item = lo.itemAtPosition(row, col + offset)
-                    if item is None or item.widget() is None:
-                        raise RuntimeError(f"Missing General field at row {row}, column {col + offset}")
-                    fields[row, col + offset] = item.widget()
-        if lo.count() != len(fields):
-            raise RuntimeError("Unexpected widgets in General form")
-
-        while lo.count():
-            lo.takeAt(0)
-
         lo.setContentsMargins(12, 12, 12, 12)
         lo.setVerticalSpacing(14)
         lo.setColumnStretch(0, 1)
         cards = []
-        for card_row, (title, description, positions) in enumerate(sections):
+        containers = []
+        for card_row, (title, description, count) in enumerate(sections):
             card = QGroupBox(title, frame)
             card.setObjectName("overviewCard")
             body = QVBoxLayout(card)
@@ -352,10 +334,17 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
             field_grid.setHorizontalSpacing(22)
             field_grid.setVerticalSpacing(10)
             body.addWidget(field_container)
-            pairs = [(fields[row, col], fields[row, col + 1]) for row, col in positions]
-            cards.append((field_grid, pairs))
+            containers.append(field_container)
+            cards.append((field_grid, count))
             lo.addWidget(card, card_row, 0)
         lo.setRowStretch(len(cards), 1)
+
+        self.build_general_tab_content(*containers, self.controller, self.ui_state)
+        cards = [
+            (grid, [(grid.itemAtPosition(row, 0).widget(), grid.itemAtPosition(row, 1).widget())
+                    for row in range(count)])
+            for grid, count in cards
+        ]
 
         scroll = frame.parentWidget()
         while scroll is not None and not isinstance(scroll, QScrollArea):
@@ -399,102 +388,43 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
 
     def _configure_data_frame(self, frame):
         lo = pyside6_components._layout(frame)
-        self.build_data_tab_content(frame, self.controller, self.ui_state)
-
-        fields = {}
-        for row in range(3):
-            for col in (0, 1):
-                item = lo.itemAtPosition(row, col)
-                if item is None or item.widget() is None:
-                    raise RuntimeError(f"Missing Data field at row {row}, column {col}")
-                fields[row, col] = item.widget()
-        if lo.count() != len(fields):
-            raise RuntimeError("Unexpected widgets in Data form")
-        while lo.count():
-            lo.takeAt(0)
-
         lo.setContentsMargins(12, 12, 12, 12)
         lo.setVerticalSpacing(14)
         lo.setColumnStretch(0, 1)
-        groups = (
-            ("Image preparation", (0,)),
-            ("Latent cache", (1, 2)),
-        )
-        for group_row, (title, rows) in enumerate(groups):
-            form = self._add_settings_group(frame, lo, group_row, title)
-            for row in rows:
-                form.addRow(fields[row, 0], fields[row, 1])
-        lo.setRowStretch(len(groups), 1)
+        image = self._add_settings_group(frame, lo, 0, "Image preparation")
+        cache = self._add_settings_group(frame, lo, 1, "Latent cache")
+        self.build_data_tab_content(image, cache, self.controller, self.ui_state)
+        lo.setRowStretch(2, 1)
 
     def _configure_backup_frame(self, frame):
         lo = pyside6_components._layout(frame)
-        self.build_backup_tab_content(frame, self.controller, self.ui_state)
-
-        fields = {}
-        positions = tuple((row, col) for row in range(7) for col in (0, 1)) + ((0, 3), (4, 3))
-        for row, col in positions:
-            item = lo.itemAtPosition(row, col)
-            if item is None or item.widget() is None:
-                raise RuntimeError(f"Missing Backups field at row {row}, column {col}")
-            fields[row, col] = item.widget()
-        if lo.count() != len(fields):
-            raise RuntimeError("Unexpected widgets in Backups form")
-        while lo.count():
-            lo.takeAt(0)
-
         lo.setContentsMargins(12, 12, 12, 12)
         lo.setVerticalSpacing(14)
         lo.setColumnStretch(0, 1)
         backups = self._add_settings_group(frame, lo, 0, "Automatic backups")
-        for row in range(4):
-            backups.addRow(fields[row, 0], fields[row, 1])
-        backup_action = QHBoxLayout()
-        backup_action.addStretch(1)
-        backup_action.addWidget(fields[0, 3])
-        backups.addRow(backup_action)
-
         saves = self._add_settings_group(frame, lo, 1, "Model saves")
-        for row in range(4, 7):
-            saves.addRow(fields[row, 0], fields[row, 1])
-        save_action = QHBoxLayout()
-        save_action.addStretch(1)
-        save_action.addWidget(fields[4, 3])
-        saves.addRow(save_action)
+        self.build_backup_tab_content(backups, saves, self.controller, self.ui_state)
         lo.setRowStretch(2, 1)
 
     @staticmethod
     def _add_settings_group(frame, layout, row, title):
         group = QGroupBox(title, frame)
-        form = QFormLayout(group)
-        form.setContentsMargins(16, 18, 16, 16)
-        form.setHorizontalSpacing(22)
-        form.setVerticalSpacing(10)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        grid = pyside6_components._layout(group)
+        grid.setContentsMargins(16, 18, 16, 16)
+        grid.setHorizontalSpacing(22)
+        grid.setVerticalSpacing(10)
+        grid.setColumnStretch(1, 1)
         layout.addWidget(group, row, 0)
-        return form
+        return group
 
     def _configure_tools_frame(self, frame):
         lo = pyside6_components._layout(frame)
-        self.build_tools_tab_content(frame, self.controller, self.ui_state)
-        fields = {}
-        for row in range(5):
-            for column in (0, 1):
-                fields[row, column] = lo.itemAtPosition(row, column).widget()
-        while lo.count():
-            lo.takeAt(0)
-
         lo.setContentsMargins(12, 12, 12, 12)
         lo.setVerticalSpacing(14)
         lo.setColumnStretch(0, 1)
-        for group_row, (title, rows) in enumerate((
-            ("Dataset and media", (0, 1)),
-            ("Model and diagnostics", (2, 3, 4)),
-        )):
-            form = self._add_settings_group(frame, lo, group_row, title)
-            for row in rows:
-                form.addRow(fields[row, 0], fields[row, 1])
+        media = self._add_settings_group(frame, lo, 0, "Dataset and media")
+        diagnostics = self._add_settings_group(frame, lo, 1, "Model and diagnostics")
+        self.build_tools_tab_content(media, diagnostics, self.controller, self.ui_state)
         lo.setRowStretch(2, 1)
 
     def _configure_embedding_frame(self, frame):

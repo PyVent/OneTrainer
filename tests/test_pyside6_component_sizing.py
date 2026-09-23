@@ -101,19 +101,34 @@ class ComponentSizingTest(unittest.TestCase):
         duplicate.assert_called_once_with()
         edit.assert_called_once_with()
 
-    def test_preset_menu_has_no_visible_placeholder_button(self):
+    def test_layer_preset_updates_fields_once_for_user_and_state_changes(self):
+        config = TrainConfig.default_values()
+        state = PySide6UIState(config)
         frame = QWidget()
         self.addCleanup(frame.close)
-        preset = components.preset_menu_button(
-            frame, 0, 0, "Load Preset", [("Default", "default")], Mock()
+        filter_widget = components.layer_filter_entry(
+            frame, 0, 0, state,
+            preset_var_name="layer_filter_preset",
+            preset_label="Layer Filter",
+            preset_tooltip="",
+            presets={"full": [], "attention": ["attn"]},
+            entry_var_name="layer_filter",
+            entry_tooltip="",
+            regex_var_name="layer_filter_regex",
+            regex_tooltip="",
         )
-        frame.show()
-        self.app.processEvents()
-        self.assertTrue(preset.isVisible())
-        self.assertEqual(
-            [button for button in frame.findChildren(QPushButton) if button.isVisible()],
-            [],
-        )
+        selector = filter_widget.findChild(components.NoScrollComboBox)
+        field_changes = Mock()
+        state.get_var("layer_filter").subscribe(field_changes)
+
+        selector.setCurrentText("attention")
+        self.assertEqual(config.layer_filter, "attn")
+        field_changes.assert_called_once_with("attn")
+
+        field_changes.reset_mock()
+        state.get_var("layer_filter_preset").set("full")
+        self.assertEqual(config.layer_filter, "")
+        field_changes.assert_called_once_with("")
 
     def test_long_popup_is_bounded_and_selection_stays_bound(self):
         frame = QWidget()

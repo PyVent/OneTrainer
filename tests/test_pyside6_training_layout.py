@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QApplication, QComboBox, QGroupBox, QLineEdit, QPu
 from modules.ui.PySide6TrainingTabView import PySide6TrainingTabView
 from modules.ui.TrainingTabController import TrainingTabController
 from modules.util.config.TrainConfig import TrainConfig
+from modules.util.enum.ModelType import ModelType
 from modules.util.ui.PySide6UIState import PySide6UIState
 
 
@@ -66,6 +67,28 @@ class TrainingLayoutTest(unittest.TestCase):
         self.app.processEvents()
         self.assertEqual(learning_rate.text(), "0.0002")
         self.assertIs(learning_rate._validator.var, state.get_var("learning_rate"))
+
+    def test_model_variants_build_titled_sections_directly_in_columns(self):
+        variants = (
+            (ModelType.STABLE_DIFFUSION_15, {"UNet", "Text Encoder"}),
+            (ModelType.STABLE_DIFFUSION_3, {"Transformer", "Text Encoder 1", "Text Encoder 3"}),
+            (ModelType.FLUX_DEV_1, {"Transformer", "Text Encoder 2"}),
+            (ModelType.HUNYUAN_VIDEO, {"Transformer", "Text Encoder 2"}),
+            (ModelType.IDEOGRAM_4, {"Unconditional transformer", "Text Encoder"}),
+        )
+        for model_type, expected in variants:
+            with self.subTest(model_type=model_type):
+                config = TrainConfig.default_values()
+                config.model_type = model_type
+                view = PySide6TrainingTabView(
+                    None, TrainingTabController(config), PySide6UIState(config)
+                )
+                self.addCleanup(view.close)
+                groups = view.findChildren(QGroupBox)
+                titles = {group.title() for group in groups}
+                self.assertTrue(expected <= titles)
+                self.assertTrue({"Optimization", "Loss", "Layer selection"} <= titles)
+                self.assertTrue(all(group.parentWidget() in view._columns for group in groups))
 
 
 if __name__ == "__main__":

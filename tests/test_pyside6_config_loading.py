@@ -50,7 +50,7 @@ class ConfigLoadingTest(unittest.TestCase):
             )
             self.addCleanup(view.close)
             warning.assert_not_called()  # missing last-session file is expected
-            view._BaseTopBarView__load_current_config("missing-config.json")
+            view._load_current_config("missing-config.json")
             warning.assert_called_once()
             self.assertIn("File not found", warning.call_args.args[2])
 

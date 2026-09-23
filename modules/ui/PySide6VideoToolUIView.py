@@ -145,8 +145,7 @@ class PySide6VideoToolUIView(BaseVideoToolUIView, QDialog, metaclass=QtABCMeta):
                 with QSignalBlocker(widget):
                     widget.setPlainText(value)
 
-        binding_id = var._bind_widget(sync_from_state)
-        widget.destroyed.connect(lambda: var._unbind_widget(binding_id))
+        var.subscribe(sync_from_state, owner=widget)
         return widget
 
     def schedule_on_main_thread(self, fn):

@@ -30,11 +30,14 @@ class BaseTrainingTabView(ABC):
     @abstractmethod
     def open_timestep_distribution(self): pass
 
+    @abstractmethod
+    def create_section(self, parent, row: int, title: str, full_width: bool = False): pass
+
     def build(self, column_0, column_1, column_2, controller, ui_state):
         model_type = controller.config.model_type
         if model_type.is_stable_diffusion():
             self.__setup_stable_diffusion_ui(column_0, column_1, column_2, controller, ui_state)
-        if model_type.is_stable_diffusion_3():
+        elif model_type.is_stable_diffusion_3():
             self.__setup_stable_diffusion_3_ui(column_0, column_1, column_2, controller, ui_state)
         elif model_type.is_stable_diffusion_xl():
             self.__setup_stable_diffusion_xl_ui(column_0, column_1, column_2, controller, ui_state)
@@ -291,7 +294,7 @@ class BaseTrainingTabView(ABC):
         self.__create_layer_frame(column_2, 3, controller, ui_state)
 
     def __create_base_frame(self, master, row, controller, ui_state):
-        frame = self.components.section_frame(master, row)
+        frame = self.create_section(master, row, "Optimization")
 
         # optimizer
         self.components.label(frame, 0, 0, "Optimizer",
@@ -365,7 +368,7 @@ class BaseTrainingTabView(ABC):
 
     def __create_base2_frame(self, master, row, controller, ui_state, video_training_enabled: bool = False,
                               supports_circular_padding: bool = False):
-        frame = self.components.section_frame(master, row)
+        frame = self.create_section(master, row, "Precision and EMA")
         row = 0
 
         # attention mechanism
@@ -465,7 +468,7 @@ class BaseTrainingTabView(ABC):
 
     def __create_text_encoder_frame(self, master, row, ui_state, supports_clip_skip=True, supports_training=True,
                                     supports_sequence_length=False, supports_dropout=True, supports_layer_offloading=True):
-        frame = self.components.section_frame(master, row)
+        frame = self.create_section(master, row, "Text Encoder")
         row = 0
 
         if supports_training:
@@ -527,7 +530,7 @@ class BaseTrainingTabView(ABC):
             supports_sequence_length: bool = False,
             supports_layer_offloading: bool = True,
     ):
-        frame = self.components.section_frame(master, row)
+        frame = self.create_section(master, row, f"Text Encoder {i}")
         row = 0
 
         suffix = f"_{i}" if i > 1 else ""
@@ -588,7 +591,7 @@ class BaseTrainingTabView(ABC):
             row += 1
 
     def __create_embedding_frame(self, master, row, ui_state):
-        frame = self.components.section_frame(master, row)
+        frame = self.create_section(master, row, "Embeddings")
 
         # embedding learning rate
         self.components.label(frame, 0, 0, "Embeddings Learning Rate",
@@ -601,7 +604,7 @@ class BaseTrainingTabView(ABC):
         self.components.switch(frame, 1, 1, ui_state, "preserve_embedding_norm")
 
     def __create_unet_frame(self, master, row, ui_state):
-        frame = self.components.section_frame(master, row)
+        frame = self.create_section(master, row, "UNet")
         row = 0
 
         # train unet
@@ -633,7 +636,7 @@ class BaseTrainingTabView(ABC):
         row += 1
 
     def __create_prior_frame(self, master, row, ui_state):
-        frame = self.components.section_frame(master, row)
+        frame = self.create_section(master, row, "Prior")
         row = 0
 
         # train prior
@@ -659,7 +662,7 @@ class BaseTrainingTabView(ABC):
 
     def __create_transformer_frame(self, master, row, ui_state, supports_guidance_scale: bool = False,
                                    supports_force_attention_mask: bool = True):
-        frame = self.components.section_frame(master, row)
+        frame = self.create_section(master, row, "Transformer")
         row = 0
 
         # train transformer
@@ -698,7 +701,7 @@ class BaseTrainingTabView(ABC):
             row += 1
 
     def __create_unconditional_transformer_frame(self, master, row, ui_state):
-        frame = self.components.section_frame(master, row)
+        frame = self.create_section(master, row, "Unconditional transformer")
         row = 0
 
         # include unconditional transformer
@@ -714,7 +717,7 @@ class BaseTrainingTabView(ABC):
     def __create_noise_frame(self, master, row, ui_state,
                               supports_generalized_offset_noise: bool = False,
                               supports_dynamic_timestep_shifting: bool = False):
-        frame = self.components.section_frame(master, row)
+        frame = self.create_section(master, row, "Noise and timesteps")
 
         # offset noise weight
         self.components.label(frame, 0, 0, "Offset Noise Weight",
@@ -773,7 +776,7 @@ class BaseTrainingTabView(ABC):
             self.components.switch(frame, 9, 1, ui_state, "dynamic_timestep_shifting")
 
     def __create_masked_frame(self, master, row, ui_state):
-        frame = self.components.section_frame(master, row)
+        frame = self.create_section(master, row, "Masked training")
 
         # Masked Training
         self.components.label(frame, 0, 0, "Masked Training",
@@ -810,7 +813,7 @@ class BaseTrainingTabView(ABC):
 
     def __create_loss_frame(self, master, row, controller, ui_state,
                             supports_vb_loss: bool = False):
-        frame = self.components.section_frame(master, row)
+        frame = self.create_section(master, row, "Loss")
 
         # MSE Strength
         self.components.label(frame, 0, 0, "MSE Strength",
@@ -870,7 +873,8 @@ class BaseTrainingTabView(ABC):
 
     def __create_layer_frame(self, master, row, controller, ui_state):
         presets = controller.get_layer_presets()
-        self.components.layer_filter_entry(master, row, 0, ui_state,
+        section = self.create_section(master, row, "Layer selection", full_width=True)
+        self.components.layer_filter_entry(section, 0, 0, ui_state,
                                            preset_var_name="layer_filter_preset", presets=presets,
                                            preset_label="Layer Filter",
                                            preset_tooltip="Select a preset defining which layers to train, or select 'Custom' to define your own.\nA blank 'custom' field or 'Full' will train all layers.",

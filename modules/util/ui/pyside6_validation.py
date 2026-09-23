@@ -58,7 +58,7 @@ class PySide6FieldValidator(BaseFieldValidator):
 
         self.component.textChanged.connect(self._on_text_changed)
         self.component.editingFinished.connect(self._on_editing_finished)
-        self._var_trace_id = self.var.trace_add("write", self._on_real_var_write)
+        self._var_trace_id = self.var.subscribe(self._on_real_var_write, owner=self.component)
         self.component.destroyed.connect(self._on_destroyed)
 
         self._bound = True
@@ -77,7 +77,7 @@ class PySide6FieldValidator(BaseFieldValidator):
         except RuntimeError:
             pass
         if self._var_trace_id is not None:
-            self.var.trace_remove("write", self._var_trace_id)
+            self.var.unsubscribe(self._var_trace_id)
             self._var_trace_id = None
 
     def _on_destroyed(self) -> None:
@@ -88,7 +88,7 @@ class PySide6FieldValidator(BaseFieldValidator):
         _active_validators.discard(self)
         self._debounce.stop()
         if self._var_trace_id is not None:
-            self.var.trace_remove("write", self._var_trace_id)
+            self.var.unsubscribe(self._var_trace_id)
             self._var_trace_id = None
 
     def _commit(self) -> None:
@@ -117,7 +117,7 @@ class PySide6FieldValidator(BaseFieldValidator):
                 self._commit()
         self._touched = False
 
-    def _on_real_var_write(self, _0, _1, _2) -> None:
+    def _on_real_var_write(self, _value) -> None:
         if self._syncing:
             return
         self._syncing = True

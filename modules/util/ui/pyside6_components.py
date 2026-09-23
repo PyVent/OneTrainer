@@ -21,12 +21,10 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QLabel,
     QLineEdit,
-    QMenu,
     QProgressBar,
     QPushButton,
     QScrollArea,
     QSizePolicy,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -130,27 +128,6 @@ def _pack_form(master: QWidget) -> None:
 # Stateless widgets
 # ---------------------------------------------------------------------------
 
-def app_title(master: QWidget, row: int, column: int):
-    frame = QFrame(master)
-    layout = QGridLayout(frame)
-    layout.setContentsMargins(5, 5, 5, 5)
-    _layout(master).addWidget(frame, row, column)
-
-    pixmap = QPixmap("resources/icons/icon.png").scaled(
-        40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation
-    )
-    icon_label = QLabel(frame)
-    icon_label.setPixmap(pixmap)
-    layout.addWidget(icon_label, 0, 0)
-
-    text_label = QLabel("OneTrainer", frame)
-    font = text_label.font()
-    font.setPointSize(14)
-    font.setBold(True)
-    text_label.setFont(font)
-    layout.addWidget(text_label, 0, 1)
-
-
 def label(
         master: QWidget,
         row: int,
@@ -217,8 +194,7 @@ def entry(
     _add(_layout(master), component, row, column, sticky=sticky)
 
     if command:
-        trace_id = ui_state.add_var_trace(var_name, command)
-        component.destroyed.connect(lambda: ui_state.remove_var_trace(var_name, trace_id))
+        var.subscribe(lambda _: command(), owner=component)
 
     if tooltip:
         _set_tooltip(component, tooltip, wide_tooltip)
@@ -278,21 +254,13 @@ def path_entry(
         placeholder=placeholder,
     )
 
-    dep_trace_ids: list[tuple] = []
     if io_type in (PathIOType.OUTPUT, PathIOType.MODEL):
         validator = getattr(entry_component, '_validator', None)
         if validator is not None:
             for dep_var_name in ("prevent_overwrites", "output_model_format"):
                 with contextlib.suppress(KeyError, AttributeError):
                     dep_var = ui_state.get_var(dep_var_name)
-                    tid = dep_var.trace_add("write", lambda _0, _1, _2: validator.revalidate())
-                    dep_trace_ids.append((dep_var, tid))
-
-    if dep_trace_ids:
-        def _cleanup_dep_traces():
-            for dv, tid in dep_trace_ids:
-                dv.trace_remove("write", tid)
-        frame.destroyed.connect(_cleanup_dep_traces)
+                    dep_var.subscribe(lambda _: validator.revalidate(), owner=entry_component)
 
     use_save_dialog = io_type in (PathIOType.OUTPUT, PathIOType.MODEL)
 
@@ -428,16 +396,13 @@ def layer_filter_entry(
 
             layer_entry.setVisible(selected != "full" or bool(patterns))
 
-    ui_state.remove_all_var_traces(preset_var_name)
-
     layer_selector = options(
         frame, 0, 1, presets_list, ui_state, preset_var_name,
-        command=preset_set_layer_choice,
     )
 
-    ui_state.add_var_trace(preset_var_name, lambda: preset_set_layer_choice(
-        ui_state.get_var(preset_var_name).get()
-    ))
+    ui_state.get_var(preset_var_name).subscribe(
+        preset_set_layer_choice, owner=frame
+    )
 
     preset_set_layer_choice(layer_selector.currentText())
 
@@ -516,43 +481,6 @@ def button(
         component.setMinimumWidth(width)
     if tooltip:
         _set_tooltip(component, tooltip)
-    _add(_layout(master), component, row, column, sticky=sticky)
-    return component
-
-
-def preset_menu_button(
-        master: QWidget,
-        row: int,
-        column: int,
-        text: str,
-        tree: list[tuple[str, Any]],
-        command: Callable[[Any], None],
-        sticky: str = "new",
-) -> QToolButton:
-    def build_menu(parent_menu: QMenu, nodes):
-        for name, value in nodes:
-            if isinstance(value, list):
-                submenu = parent_menu.addMenu(name)
-                build_menu(submenu, value)
-            else:
-                parent_menu.addAction(name, lambda v=value: command(v))
-
-    menu = QMenu(master)
-    build_menu(menu, tree)
-
-    component = QToolButton(master)
-    component.setObjectName("presetMenuButton")
-    component.setText(text)
-    component.setMenu(menu)
-    component.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-    # the global QToolButton stylesheet (pyside6_util.create_application) enlarges the
-    # menu-indicator, which switches this widget to the CSS box model and resets its
-    # vertical padding away from the native style's — match a plain QPushButton's
-    # height explicitly so it doesn't grow taller than its siblings.
-    reference_button = QPushButton("", master)
-    component.setFixedHeight(reference_button.sizeHint().height())
-    reference_button.hide()
-    reference_button.deleteLater()
     _add(_layout(master), component, row, column, sticky=sticky)
     return component
 
@@ -704,8 +632,7 @@ def options(
         _updating = False
 
     combo.currentTextChanged.connect(on_combo)
-    cb_id = var._bind_widget(on_var)
-    combo.destroyed.connect(lambda: var._unbind_widget(cb_id))
+    var.subscribe(on_var, owner=combo)
     _add(_layout(master), combo, row, column)
     return combo
 
@@ -802,8 +729,7 @@ def options_kv(
             break
 
     combo.currentTextChanged.connect(on_combo)
-    cb_id = var._bind_widget(on_var)
-    combo.destroyed.connect(lambda: var._unbind_widget(cb_id))
+    var.subscribe(on_var, owner=combo)
     _add(_layout(master), combo, row, column, sticky=sticky)
 
     # Initialize dependent controls with the current selection.
@@ -832,8 +758,7 @@ def switch(
     component.setChecked(bool(var.get()))
 
     if command:
-        trace_id = ui_state.add_var_trace(var_name, command)
-        component.destroyed.connect(lambda: ui_state.remove_var_trace(var_name, trace_id))
+        var.subscribe(lambda _: command(), owner=component)
 
     _updating = False
 
@@ -854,8 +779,7 @@ def switch(
         _updating = False
 
     component.toggled.connect(on_toggle)
-    cb_id = var._bind_widget(on_var)
-    component.destroyed.connect(lambda: var._unbind_widget(cb_id))
+    var.subscribe(on_var, owner=component)
 
     if width is not None:
         component.setFixedWidth(width)

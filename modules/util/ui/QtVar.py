@@ -1,41 +1,33 @@
 from collections.abc import Callable
 from typing import Any
 
+from PySide6.QtCore import QObject
+
 
 class QtVar:
-    # Toolkit-neutral observable variable. Drop-in for tk.StringVar / tk.BooleanVar.
+    """A value shared by a config field and its Qt controls."""
 
     def __init__(self, value: Any = ""):
         self._value = value
-        self._traces: dict[int, Callable[[], None]] = {}
+        self._subscribers: dict[int, Callable[[Any], None]] = {}
         self._next_id = 0
-        self._widget_callbacks: dict[int, Callable[[Any], None]] = {}
 
     def get(self) -> Any:
         return self._value
 
-    def set(self, value: Any):
+    def set(self, value: Any) -> None:
         self._value = value
-        for cb in list(self._widget_callbacks.values()):
-            cb(value)
-        for cb in list(self._traces.values()):
-            cb(None, None, None)
+        for callback in list(self._subscribers.values()):
+            callback(value)
 
-    def trace_add(self, mode: str, callback: Callable) -> int:
-        id_ = self._next_id
-        self._traces[id_] = callback
+    def subscribe(self, callback: Callable[[Any], None], owner: QObject | None = None) -> int:
+        """Notify on every set; an owned subscription ends with its Qt control."""
         self._next_id += 1
-        return id_
+        subscription_id = self._next_id
+        self._subscribers[subscription_id] = callback
+        if owner is not None:
+            owner.destroyed.connect(lambda: self.unsubscribe(subscription_id))
+        return subscription_id
 
-    def trace_remove(self, mode: str, name: int):
-        self._traces.pop(name, None)
-
-    def _bind_widget(self, push_to_widget: Callable[[Any], None]) -> int:
-        # Register a one-way push from var → widget. Returns an ID for _unbind_widget.
-        id_ = self._next_id
-        self._widget_callbacks[id_] = push_to_widget
-        self._next_id += 1
-        return id_
-
-    def _unbind_widget(self, id_: int):
-        self._widget_callbacks.pop(id_, None)
+    def unsubscribe(self, subscription_id: int) -> None:
+        self._subscribers.pop(subscription_id, None)

@@ -95,7 +95,10 @@ class PySide6ConceptTabView(PySide6ConfigListView, BaseConceptTabView):
             self.search_var.set(text)
             self._update_filters()
         search_entry.textChanged.connect(_on_search)
-        self.search_var._bind_widget(lambda v: search_entry.setText(v))
+        self.search_var.subscribe(
+            lambda v: search_entry.setText(v) if search_entry.text() != v else None,
+            owner=search_entry,
+        )
 
         filter_combo = pyside6_components.NoScrollComboBox(toolbar)
         filter_combo.addItems(self._FILTER_TYPES)
@@ -107,7 +110,10 @@ class PySide6ConceptTabView(PySide6ConfigListView, BaseConceptTabView):
             self.filter_var.set(text)
             self._update_filters()
         filter_combo.currentTextChanged.connect(_on_filter)
-        self.filter_var._bind_widget(lambda v: filter_combo.setCurrentText(v))
+        self.filter_var.subscribe(
+            lambda v: filter_combo.setCurrentText(v) if filter_combo.currentText() != v else None,
+            owner=filter_combo,
+        )
 
         show_disabled_cb = QCheckBox("Show Disabled", toolbar)
         show_disabled_cb.setChecked(True)
@@ -117,7 +123,11 @@ class PySide6ConceptTabView(PySide6ConfigListView, BaseConceptTabView):
             self.show_disabled_var.set(bool(state))
             self._update_filters()
         show_disabled_cb.stateChanged.connect(_on_show_disabled)
-        self.show_disabled_var._bind_widget(lambda v: show_disabled_cb.setChecked(bool(v)))
+        self.show_disabled_var.subscribe(
+            lambda v: show_disabled_cb.setChecked(bool(v))
+            if show_disabled_cb.isChecked() != bool(v) else None,
+            owner=show_disabled_cb,
+        )
 
         clear_btn = QPushButton("Clear", toolbar)
         clear_btn.clicked.connect(self._reset_filters)
@@ -203,8 +213,10 @@ class PySide6ConceptWidgetView(BaseConceptWidgetView, QWidget):
             setattr(concept, 'enabled', bool(state)),
             save_command(),
         ))
-        self.ui_state.get_var("enabled")._bind_widget(
+        self.ui_state.get_var("enabled").subscribe(
             lambda v: enabled_cb.setChecked(bool(v))
+            if enabled_cb.isChecked() != bool(v) else None,
+            owner=enabled_cb,
         )
         layout.addWidget(self.name_label)
 
