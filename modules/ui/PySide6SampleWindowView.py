@@ -54,7 +54,8 @@ class PySide6SampleWindowView(BaseSampleWindowView, QDialog):
         self._progress.setRange(0, 1000)
         outer.addWidget(self._progress, 2, 0)
 
-        sample_btn = QPushButton("sample", self)
+        sample_btn = QPushButton("Sample", self)
+        sample_btn.setObjectName("primaryAction")
         def _on_sample():
             # With an external model (manual sample during training) do_sample
             # only enqueues a command for the training thread to execute, so it

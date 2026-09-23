@@ -38,7 +38,7 @@ class BaseConceptWindowView:
         self.components.label(frame, 3, 0, "Path",
                          tooltip="Path where the training data is located")
         self.components.path_entry(frame, 3, 1, ui_state, "path", mode="dir")
-        self.components.button(frame, 3, 2, text="download now", command=controller.download_dataset_threaded,
+        self.components.button(frame, 3, 2, text="Download Now", command=controller.download_dataset_threaded,
                           tooltip="Download dataset from Huggingface now, for the purpose of previewing and statistics. Otherwise, it will be downloaded when you start training. Path must be a Huggingface repository.")
 
         # prompt source

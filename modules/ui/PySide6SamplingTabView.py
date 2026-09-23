@@ -5,6 +5,7 @@ from modules.ui.SamplingTabController import SamplingTabController
 from modules.util.ui import pyside6_components
 from modules.util.ui.pyside6_util import QtABCMeta
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
@@ -42,11 +43,16 @@ class PySide6SampleWidgetView(BaseSampleWidgetView, QWidget, metaclass=QtABCMeta
         from modules.util.ui.PySide6UIState import PySide6UIState
         self.element = element
         self.ui_state = PySide6UIState(element)
+        self.setObjectName("sampleCard")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setMinimumWidth(0)
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
 
         self.build_content(self, element, self.ui_state, i, open_command, remove_command, clone_command, save_command)
         layout = pyside6_components._layout(self)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setHorizontalSpacing(8)
+        layout.setVerticalSpacing(8)
         self._fields = tuple(layout.itemAtPosition(0, column).widget() for column in range(12))
         for button, text, width in ((self._fields[0], "Remove", 76),
                                     (self._fields[1], "Copy", 64),

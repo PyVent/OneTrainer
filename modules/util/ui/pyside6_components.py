@@ -464,16 +464,10 @@ def colored_icon_button(
         command: Callable[[], None],
         padx: int = 0,
 ) -> QPushButton:
-    color = fg_color[0] if isinstance(fg_color, (tuple, list)) else fg_color
+    # Keep fg_color in the shared API; semantic actions now follow the theme.
+    is_remove = text.lower() in ("x", "remove")
     component = QPushButton(text, master)
-    rgb = QColor(color)
-    brightness = rgb.red() * 0.299 + rgb.green() * 0.587 + rgb.blue() * 0.114
-    foreground = "#17243d" if brightness >= 100 else "#ffffff"
-    component.setStyleSheet(
-        f"QPushButton {{ background-color: {color}; color: {foreground}; "
-        f"border: none; border-radius: 6px; padding: 0; min-height: {CONTROL_HEIGHT}px; "
-        f"max-height: {CONTROL_HEIGHT}px; font-size: 16px; font-weight: 700; }}"
-    )
+    component.setObjectName("removeAction" if is_remove else "copyAction")
     component.setFixedSize(CONTROL_HEIGHT, CONTROL_HEIGHT)
     action = "Remove" if text == "X" else "Duplicate" if text == "+" else text
     if text in ("X", "+"):
@@ -483,7 +477,8 @@ def colored_icon_button(
         mark.fill(Qt.GlobalColor.transparent)
         painter = QPainter(mark)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setPen(QPen(QColor(foreground), 2.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        mark_color = "#bb7885" if is_remove else "#768bab"
+        painter.setPen(QPen(QColor(mark_color), 2.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         if text == "X":
             painter.drawLine(5, 5, 15, 15)
             painter.drawLine(15, 5, 5, 15)

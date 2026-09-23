@@ -153,8 +153,10 @@ class PySide6ConceptWidgetView(BaseConceptWidgetView, QWidget):
         self.i = i
 
         self.setFixedSize(230, 240)
+        self.setObjectName("conceptCard")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(6, 5, 6, 5)
+        layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(4)
 
         image = self._get_preview_image()
@@ -167,7 +169,7 @@ class PySide6ConceptWidgetView(BaseConceptWidgetView, QWidget):
             self.i, (self.ui_state, self.image_ui_state, self.text_ui_state)
         )
 
-        self.name_label = QLabel(self._get_display_name(), self)
+        self.name_label = QLabel(self._get_display_name() or "Untitled concept", self)
         self.name_label.setWordWrap(True)
         self.name_label.setToolTip(self._get_display_name())
 
@@ -177,17 +179,17 @@ class PySide6ConceptWidgetView(BaseConceptWidgetView, QWidget):
         layout.addLayout(actions)
 
         close_btn = QPushButton("Remove", self)
+        close_btn.setObjectName("removeAction")
         close_btn.setMinimumWidth(close_btn.fontMetrics().horizontalAdvance("Remove") + 20)
         close_btn.setMinimumHeight(38)
-        close_btn.setStyleSheet("background-color: #C00000; color: white;")
         close_btn.setToolTip("Remove concept")
         close_btn.clicked.connect(lambda: remove_command(self.i))
         actions.addWidget(close_btn)
 
         clone_btn = QPushButton("Copy", self)
+        clone_btn.setObjectName("copyAction")
         clone_btn.setMinimumWidth(clone_btn.fontMetrics().horizontalAdvance("Copy") + 20)
         clone_btn.setMinimumHeight(38)
-        clone_btn.setStyleSheet("background-color: #00C000; color: white;")
         clone_btn.setToolTip("Duplicate concept")
         clone_btn.clicked.connect(lambda: clone_command(self.i, controller.randomize_seed))
         actions.addWidget(clone_btn)
@@ -195,7 +197,6 @@ class PySide6ConceptWidgetView(BaseConceptWidgetView, QWidget):
         enabled_cb = QCheckBox(self)
         enabled_cb.setChecked(concept.enabled)
         enabled_cb.setFixedSize(20, 20)
-        enabled_cb.setStyleSheet("QCheckBox::indicator { width: 20px; height: 20px; }")
         enabled_cb.setToolTip("Enable concept")
         actions.addWidget(enabled_cb)
         enabled_cb.stateChanged.connect(lambda state: (
@@ -208,7 +209,7 @@ class PySide6ConceptWidgetView(BaseConceptWidgetView, QWidget):
         layout.addWidget(self.name_label)
 
     def configure_element(self):
-        self.name_label.setText(self._get_display_name())
+        self.name_label.setText(self._get_display_name() or "Untitled concept")
         self.name_label.setToolTip(self._get_display_name())
         image = self._get_preview_image()
         pixmap = QPixmap.fromImage(ImageQt(image.convert("RGBA")))

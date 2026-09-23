@@ -38,7 +38,7 @@ class PySide6OptimizerParamsWindowView(BaseOptimizerParamsWindowView, QDialog):
         lo.setColumnStretch(4, 1)
         outer.addWidget(scroll, 0, 0)
 
-        ok = QPushButton("ok", self)
+        ok = QPushButton("Done", self)
         ok.clicked.connect(self._on_close)
         outer.addWidget(ok, 1, 0)
 

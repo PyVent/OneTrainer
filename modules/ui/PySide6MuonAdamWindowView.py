@@ -28,6 +28,6 @@ class PySide6MuonAdamWindowView(BaseMuonAdamWindowView, QDialog):
         self.build_content(frame, controller, ui_state)
         outer.addWidget(scroll, 0, 0)
 
-        ok = QPushButton("ok", self)
+        ok = QPushButton("Done", self)
         ok.clicked.connect(self.accept)
         outer.addWidget(ok, 1, 0)

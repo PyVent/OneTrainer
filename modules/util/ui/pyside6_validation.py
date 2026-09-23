@@ -5,7 +5,6 @@ from modules.util.ui.QtVar import QtVar
 from modules.util.ui.UIState import BaseUIState
 from modules.util.ui.validation import (
     DEBOUNCE_TYPING_MS,
-    ERROR_BORDER_COLOR,
     BaseFieldValidator,
     _active_validators,
     _validate_path_field,
@@ -29,7 +28,6 @@ class PySide6FieldValidator(BaseFieldValidator):
         super().__init__(ui_state, var_name, extra_validate, required)
         self.component = component
         self.var = var
-        self._original_style = component.styleSheet()
         self._syncing = False
         self._touched = False
         self._var_trace_id: int | None = None
@@ -40,10 +38,18 @@ class PySide6FieldValidator(BaseFieldValidator):
         self._debounce.timeout.connect(self._on_debounce_fire)
 
     def _apply_error(self) -> None:
-        self.component.setStyleSheet(f"border: 1px solid {ERROR_BORDER_COLOR};")
+        self._set_invalid(True)
 
     def _clear_error(self) -> None:
-        self.component.setStyleSheet(self._original_style)
+        self._set_invalid(False)
+
+    def _set_invalid(self, invalid: bool) -> None:
+        if self.component.property("invalid") == invalid:
+            return
+        self.component.setProperty("invalid", invalid)
+        self.component.style().unpolish(self.component)
+        self.component.style().polish(self.component)
+        self.component.update()
 
     def attach(self) -> None:
         self._syncing = True

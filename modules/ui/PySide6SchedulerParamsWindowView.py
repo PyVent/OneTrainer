@@ -14,7 +14,7 @@ class PySide6KvParamsView(PySide6ConfigListView, BaseKvParamsView):
             self, master, controller, ui_state,
             attr_name="scheduler_params",
             from_external_file=False,
-            add_button_text="add parameter",
+            add_button_text="Add Parameter",
             is_full_width=True,
         )
         BaseKvParamsView.__init__(self, pyside6_components)

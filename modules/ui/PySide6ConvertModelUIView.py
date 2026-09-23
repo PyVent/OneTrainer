@@ -54,6 +54,7 @@ class PySide6ConvertModelUIView(BaseConvertModelUIView, QDialog):
         outer.addWidget(self._scroll_area, 0, 0)
 
         self.build_content(self._frame, controller, self.ui_state, self._rebuild_dynamic_ui)
+        self.button.setObjectName("primaryAction")
         training_method_label = self._layout.itemAtPosition(1, 0).widget()
         if isinstance(training_method_label, QLabel):
             training_method_label.setText("Training Method")
@@ -61,6 +62,7 @@ class PySide6ConvertModelUIView(BaseConvertModelUIView, QDialog):
         self._layout.setRowStretch(self._layout.rowCount(), 1)
 
         self._status_label = QLabel("", self)
+        self._status_label.setObjectName("convertStatus")
         self._status_label.setWordWrap(True)
         self._status_label.setAccessibleName("Conversion status")
         outer.addWidget(self._status_label, 1, 0)
@@ -79,13 +81,19 @@ class PySide6ConvertModelUIView(BaseConvertModelUIView, QDialog):
         self.button.setEnabled(not active)
         self._frame.setEnabled(not active)
 
+    def _set_status_error(self, error: bool):
+        self._status_label.setObjectName("errorStatus" if error else "convertStatus")
+        self._status_label.style().unpolish(self._status_label)
+        self._status_label.style().polish(self._status_label)
+        self._status_label.update()
+
     @Slot()
     def start_conversion(self):
         if self._conversion_thread is not None:
             return
 
         self._conversion_result = None
-        self._status_label.setStyleSheet("")
+        self._set_status_error(False)
         self._status_label.setText("Converting model...")
         self.set_converting(True)
 
@@ -114,7 +122,7 @@ class PySide6ConvertModelUIView(BaseConvertModelUIView, QDialog):
             self._status_label.setText("Model converted")
         else:
             self._status_label.setText(f"Conversion failed: {error}")
-            self._status_label.setStyleSheet("color: #b00020;")
+            self._set_status_error(True)
         self.set_converting(False)
         self._conversion_thread = None
         self._conversion_worker = None

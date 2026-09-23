@@ -190,7 +190,7 @@ class PySide6ConceptWindowView(BaseConceptWindowView, QDialog):
 
         tabs.addTab(stats_scroll, "statistics")
 
-        ok = QPushButton("ok", self)
+        ok = QPushButton("Done", self)
         ok.clicked.connect(self._ok)
         outer.addWidget(ok, 1, 0)
 

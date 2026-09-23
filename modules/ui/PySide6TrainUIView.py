@@ -680,17 +680,18 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         if not self.training_button:
             return
         styles = {
-            "idle":     ("Start Training", True,  "#245eea", "white"),
-            "running":  ("Stop Training",  True,  "#dc3545", "white"),
-            "stopping": ("Stopping...",    False, "#dc3545", "white"),
+            "idle":     ("Start Training", True, "startTrainingAction"),
+            "running":  ("Stop Training", True, "stopTrainingAction"),
+            "stopping": ("Stopping...", False, "stopTrainingAction"),
         }
-        text, enabled, bg, fg = styles.get(mode, ("Start Training", True, "#245eea", "white"))
+        text, enabled, role = styles.get(mode, styles["idle"])
         self.training_button.setText(text)
         self.training_button.setEnabled(enabled)
-        self.training_button.setStyleSheet(
-            f"QPushButton {{ background-color: {bg}; color: {fg}; }}"
-            f"QPushButton:disabled {{ background-color: {bg}; color: {fg}; }}"
-        )
+        if self.training_button.objectName() != role:
+            self.training_button.setObjectName(role)
+            self.training_button.style().unpolish(self.training_button)
+            self.training_button.style().polish(self.training_button)
+            self.training_button.update()
 
     def export_training(self):
         file_path, _ = QFileDialog.getSaveFileName(
