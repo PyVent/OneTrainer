@@ -2,6 +2,7 @@
 
 import importlib.util
 import sys
+import tempfile
 import types
 import unittest
 from pathlib import Path
@@ -49,6 +50,7 @@ def _load_controller():
     module("modules.util.profiling_util", PeakMemoryRecorder=Mock)
     torch_gc = Mock()
     module("modules.util.torch_util", torch_gc=torch_gc)
+    module("modules.util.tensorboard_util", tensorboard_executable=Mock(return_value="tensorboard"))
     module("modules.util.TrainProgress", TrainProgress=type("TrainProgress", (), {}))
     module("modules.util.ui")
     module("modules.util.ui.validation", flush_and_validate_all=Mock(return_value=[]))
@@ -78,6 +80,7 @@ class TrainUILifecycleTest(unittest.TestCase):
         self.controller.training_callbacks = None
         self.controller.training_commands = object()
         self.controller.always_on_tensorboard_subprocess = None
+        self.controller._tensorboard_open_thread = None
         self.controller.start_time = 1
         self.controller.start_total_steps = 2
         self.controller._start_always_on_tensorboard = Mock()
@@ -162,6 +165,41 @@ class TrainUILifecycleTest(unittest.TestCase):
         )
         self.assertIsNone(self.controller.training_thread)
         self.assertIsNone(self.controller.training_commands)
+
+    def test_tensorboard_button_starts_server_and_opens_when_ready(self):
+        self.controller.train_config.tensorboard_port = 6006
+        self.controller._tensorboard_is_reachable = Mock(side_effect=[False, False, True])
+        process = Mock()
+        process.poll.return_value = None
+        self.controller._start_always_on_tensorboard.side_effect = (
+            lambda: setattr(self.controller, "always_on_tensorboard_subprocess", process)
+        )
+        browser = Mock()
+        with patch.dict(self.Controller.open_tensorboard.__globals__, {
+            "webbrowser": SimpleNamespace(open=browser),
+        }):
+            self.controller.open_tensorboard()
+            self.controller._tensorboard_open_thread.join(timeout=3)
+        self.controller._start_always_on_tensorboard.assert_called_once_with()
+        browser.assert_called_once_with("http://localhost:6006", new=0, autoraise=False)
+
+    def test_tensorboard_launch_error_is_reported(self):
+        self.controller._start_always_on_tensorboard = self.Controller._start_always_on_tensorboard.__get__(
+            self.controller, self.Controller,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            self.controller.train_config.workspace_dir = directory
+            self.controller.train_config.tensorboard_port = 6006
+            self.controller.train_config.tensorboard_expose = False
+            with patch.dict(self.Controller._start_always_on_tensorboard.__globals__, {
+                    "tensorboard_executable": Mock(side_effect=FileNotFoundError("missing tensorboard.exe"))
+            }), \
+                    patch("traceback.print_exc"):
+                self.controller._start_always_on_tensorboard()
+        self.assertIsNone(self.controller.always_on_tensorboard_subprocess)
+        self.view.on_update_status.assert_called_once_with(
+            "Could not start TensorBoard: missing tensorboard.exe"
+        )
 
 
 if __name__ == "__main__":

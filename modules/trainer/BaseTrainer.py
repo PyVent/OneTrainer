@@ -1,6 +1,5 @@
 import os
 import subprocess
-import sys
 from abc import ABCMeta, abstractmethod
 
 from modules.model.BaseModel import BaseModel
@@ -14,6 +13,7 @@ from modules.util.commands.TrainCommands import TrainCommands
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.TimedActionMixin import TimedActionMixin
 from modules.util.TrainProgress import TrainProgress
+from modules.util.tensorboard_util import tensorboard_executable
 
 import torch
 
@@ -82,11 +82,10 @@ class BaseTrainer(
             self.config.training_method
         )
     def _start_tensorboard(self):
-        tensorboard_executable = os.path.join(os.path.dirname(sys.executable), "tensorboard")
         tensorboard_log_dir = os.path.join(self.config.workspace_dir, "tensorboard")
 
         tensorboard_args = [
-            tensorboard_executable,
+            tensorboard_executable(),
             "--logdir",
             tensorboard_log_dir,
             "--port",

@@ -1,8 +1,8 @@
 import datetime
 import json
 import os
+import socket
 import subprocess
-import sys
 import threading
 import time
 import traceback
@@ -21,6 +21,7 @@ from modules.util.commands.TrainCommands import TrainCommands
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.profiling_util import PeakMemoryRecorder
 from modules.util.torch_util import torch_gc
+from modules.util.tensorboard_util import tensorboard_executable
 from modules.util.TrainProgress import TrainProgress
 from modules.util.ui.validation import flush_and_validate_all
 
@@ -36,6 +37,7 @@ class TrainUIController:
         self.training_callbacks: TrainCallbacks | None = None
         self.training_commands: TrainCommands | None = None
         self.always_on_tensorboard_subprocess = None
+        self._tensorboard_open_thread = None
         self.current_workspace_dir = config.workspace_dir
         self.start_time: float | None = None
         self.start_total_steps: int | None = None
@@ -84,34 +86,36 @@ class TrainUIController:
             return f"{seconds}s"
 
     def _check_start_always_on_tensorboard(self):
-        if self.train_config.tensorboard_always_on and not self.always_on_tensorboard_subprocess:
+        if self.train_config.tensorboard_always_on and (
+            self.always_on_tensorboard_subprocess is None
+            or self.always_on_tensorboard_subprocess.poll() is not None
+        ):
             self._start_always_on_tensorboard()
 
     def _start_always_on_tensorboard(self):
         if self.always_on_tensorboard_subprocess:
             self._stop_always_on_tensorboard()
 
-        tensorboard_executable = os.path.join(os.path.dirname(sys.executable), "tensorboard")
         tensorboard_log_dir = os.path.join(self.train_config.workspace_dir, "tensorboard")
 
         os.makedirs(Path(tensorboard_log_dir).absolute(), exist_ok=True)
 
-        tensorboard_args = [
-            tensorboard_executable,
-            "--logdir",
-            tensorboard_log_dir,
-            "--port",
-            str(self.train_config.tensorboard_port),
-            "--samples_per_plugin=images=100,scalars=10000",
-        ]
-
-        if self.train_config.tensorboard_expose:
-            tensorboard_args.append("--bind_all")
-
         try:
+            tensorboard_args = [
+                tensorboard_executable(),
+                "--logdir",
+                tensorboard_log_dir,
+                "--port",
+                str(self.train_config.tensorboard_port),
+                "--samples_per_plugin=images=100,scalars=10000",
+            ]
+            if self.train_config.tensorboard_expose:
+                tensorboard_args.append("--bind_all")
             self.always_on_tensorboard_subprocess = subprocess.Popen(tensorboard_args)
-        except Exception:
+        except Exception as exc:
             self.always_on_tensorboard_subprocess = None
+            traceback.print_exc()
+            self.on_update_status(f"Could not start TensorBoard: {exc}")
 
     def _stop_always_on_tensorboard(self):
         if self.always_on_tensorboard_subprocess:
@@ -149,7 +153,40 @@ class TrainUIController:
                 self._stop_always_on_tensorboard()
 
     def open_tensorboard(self):
-        webbrowser.open("http://localhost:" + str(self.train_config.tensorboard_port), new=0, autoraise=False)
+        url = "http://localhost:" + str(self.train_config.tensorboard_port)
+        if self._tensorboard_is_reachable():
+            webbrowser.open(url, new=0, autoraise=False)
+            return
+
+        process = self.always_on_tensorboard_subprocess
+        if process is None or process.poll() is not None:
+            self._start_always_on_tensorboard()
+        if self.always_on_tensorboard_subprocess is None:
+            return
+        if self._tensorboard_open_thread is None or not self._tensorboard_open_thread.is_alive():
+            self._tensorboard_open_thread = threading.Thread(
+                target=self._open_tensorboard_when_ready, args=(url,), daemon=True,
+            )
+            self._tensorboard_open_thread.start()
+
+    def _tensorboard_is_reachable(self) -> bool:
+        try:
+            with socket.create_connection(("127.0.0.1", int(self.train_config.tensorboard_port)), timeout=0.2):
+                return True
+        except (OSError, ValueError):
+            return False
+
+    def _open_tensorboard_when_ready(self, url: str):
+        for _ in range(80):
+            if self._tensorboard_is_reachable():
+                webbrowser.open(url, new=0, autoraise=False)
+                return
+            process = self.always_on_tensorboard_subprocess
+            if process is None or process.poll() is not None:
+                self.on_update_status("TensorBoard stopped before it became available")
+                return
+            time.sleep(0.25)
+        self.on_update_status("TensorBoard did not become available on its configured port")
 
     def open_dataset_tool(self, parent, view_cls):
         return CaptionUIController(None, False).create_window(parent, view_cls)

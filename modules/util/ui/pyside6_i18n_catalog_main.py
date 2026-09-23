@@ -7,6 +7,9 @@ model names and other persisted values must remain in their original form.
 RU: dict[str, str] = {
     "Source and access": "Источник и доступ",
     "Model components and precision": "Компоненты модели и точность",
+    "Could not start TensorBoard: {exc}": "Не удалось запустить TensorBoard: {exc}",
+    "TensorBoard stopped before it became available": "TensorBoard завершился до открытия порта",
+    "TensorBoard did not become available on its configured port": "TensorBoard не открыл указанный порт",
     # Navigation, main window, toolbar and dialogs.
     "Train your vision": "Воплощайте свои идеи",
     "Prepare": "Подготовка",
