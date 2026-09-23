@@ -366,8 +366,26 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         return form
 
     def _configure_tools_frame(self, frame):
+        lo = pyside6_components._layout(frame)
         self.build_tools_tab_content(frame, self.controller, self.ui_state)
-        pyside6_components._pack_form(frame)
+        fields = {}
+        for row in range(5):
+            for column in (0, 1):
+                fields[row, column] = lo.itemAtPosition(row, column).widget()
+        while lo.count():
+            lo.takeAt(0)
+
+        lo.setContentsMargins(12, 12, 12, 12)
+        lo.setVerticalSpacing(14)
+        lo.setColumnStretch(0, 1)
+        for group_row, (title, rows) in enumerate((
+            ("Dataset and media", (0, 1)),
+            ("Model and diagnostics", (2, 3, 4)),
+        )):
+            form = self._add_settings_group(frame, lo, group_row, title)
+            for row in rows:
+                form.addRow(fields[row, 0], fields[row, 1])
+        lo.setRowStretch(2, 1)
 
     def _configure_embedding_frame(self, frame):
         self.build_embedding_tab_content(frame, self.controller, self.ui_state)

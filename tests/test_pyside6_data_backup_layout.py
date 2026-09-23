@@ -71,6 +71,16 @@ class DataAndBackupLayoutTest(unittest.TestCase):
         finally:
             var.set(original)
 
+    def test_tools_are_grouped_without_losing_actions(self):
+        page = self.view._tab_widgets["tools"]
+        groups = page.findChildren(QGroupBox)
+        self.assertEqual([group.title() for group in groups], ["Dataset and media", "Model and diagnostics"])
+        self.assertEqual([group.layout().rowCount() for group in groups], [2, 3])
+        self.assertEqual(
+            [button.text() for group in groups for button in group.findChildren(QPushButton)],
+            ["Open"] * 5,
+        )
+
     def test_removed_training_method_pages_release_validators(self):
         self.view.change_training_method(TrainingMethod.LORA)
         old_page = self.view._tab_widgets["LoRA"]

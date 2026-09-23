@@ -48,8 +48,7 @@ def _layout(master: QWidget) -> QGridLayout:
 
 
 def _set_tooltip(component: QWidget, text: str, wide: bool = False) -> None:
-    # plain QToolTip text is rendered on a single line; wrap it as rich text
-    # with a max-width so it matches Ctk's wraplength of 180/350px
+    # Plain tooltips stay on one line; rich text allows a readable width.
     width = 350 if wide else 180
     component.setToolTip(f'<p style="max-width: {width}px;">{html.escape(text)}</p>')
 
@@ -199,7 +198,7 @@ def entry(
         wide_tooltip: bool = False,
         width: int = 140,
         sticky: str = "new",
-        max_undo: int | None = None,  # unused: kept for signature parity with ctk_components.entry()
+        max_undo: int | None = None,
         validator_factory: Callable[..., PySide6FieldValidator] | None = None,
         extra_validate: Callable[[str], str | None] | None = None,
         required: bool = False,
@@ -481,8 +480,7 @@ def button(
     component = QPushButton(text, master)
     component.clicked.connect(command)
     if width is not None:
-        # ctk's width is a floor, not a cap: CTkButton never disables grid propagation,
-        # so it grows past `width` to fit its label. Match that with setMinimumWidth.
+        # Width is a floor; longer labels may grow naturally.
         component.setMinimumWidth(width)
     if tooltip:
         _set_tooltip(component, tooltip)
@@ -669,7 +667,7 @@ def options_kv(
     combo.destroyed.connect(lambda: var._unbind_widget(cb_id))
     _add(_layout(master), combo, row, column, sticky=sticky)
 
-    # match CTK behavior: fire initial command with the current value
+    # Initialize dependent controls with the current selection.
     if command:
         current = var.get()
         for _, v in values:

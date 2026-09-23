@@ -100,7 +100,7 @@ class BaseTrainUIView(ABC):
     @abstractmethod
     def generate_debug_package(self): pass
 
-    # --- Content builders (components calls; called by CTK view after frame creation) ---
+    # --- Content builders used by the Qt view ---
 
     def build_bottom_bar_content(self, frame, status_frame, controller, ui_state):
         self.set_step_progress, self.set_epoch_progress = self.components.double_progress(frame, 0, 0, "step", "epoch")

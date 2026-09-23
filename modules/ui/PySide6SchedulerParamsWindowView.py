@@ -4,7 +4,7 @@ from modules.ui.SchedulerParamsWindowController import KvParamsController, Sched
 from modules.util.ui import pyside6_components
 from modules.util.ui.PySide6UIState import PySide6UIState
 
-from PySide6.QtWidgets import QDialog, QGridLayout, QPushButton, QScrollArea, QWidget
+from PySide6.QtWidgets import QDialog, QGridLayout, QLabel, QPushButton, QWidget
 
 
 class PySide6KvParamsView(PySide6ConfigListView, BaseKvParamsView):
@@ -71,26 +71,25 @@ class PySide6SchedulerParamsWindowView(BaseSchedulerParamsWindowView, QDialog):
         self.resize(800, 500)
 
         outer = QGridLayout(self)
-        outer.setRowStretch(0, 1)
+        outer.setContentsMargins(12, 12, 12, 12)
+        outer.setSpacing(10)
+        outer.setColumnStretch(0, 1)
+        outer.setRowStretch(2, 1)
 
-        scroll = QScrollArea(self)
-        scroll.setWidgetResizable(True)
-        inner = QWidget()
-        scroll.setWidget(inner)
-        inner_lo = pyside6_components._layout(inner)
-        inner_lo.setColumnStretch(1, 1)
+        if controller.is_custom_scheduler():
+            form = QWidget(self)
+            pyside6_components._layout(form).setColumnStretch(1, 1)
+            self.build_content(form, controller, ui_state)
+            outer.addWidget(form, 0, 0)
 
-        self.build_content(inner, controller, ui_state)
-
-        expand_frame = QWidget(inner)
-        inner_lo.addWidget(expand_frame, inner_lo.rowCount(), 0, 1, 2)
+        outer.addWidget(QLabel("Scheduler parameters: name and value", self), 1, 0)
+        expand_frame = QWidget(self)
+        outer.addWidget(expand_frame, 2, 0)
         # Must be assigned to an instance variable — PySide6ConfigListView is not a QWidget,
         # so Qt won't keep it alive. Without this, the GC collects it and the button's
         # clicked signal loses its connection to __add_element.
         self._kv_params_view = PySide6KvParamsView(expand_frame, KvParamsController(controller.config), ui_state)
 
-        outer.addWidget(scroll, 0, 0)
-
-        ok = QPushButton("ok", self)
+        ok = QPushButton("OK", self)
         ok.clicked.connect(self.accept)
-        outer.addWidget(ok, 1, 0)
+        outer.addWidget(ok, 3, 0)
