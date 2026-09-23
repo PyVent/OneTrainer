@@ -7,6 +7,7 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QStyleFactory, QWidget
 
 from modules.util.ui.pyside6_theme import apply_theme, saved_theme
+from modules.util.ui.pyside6_i18n import install_i18n
 
 
 class QtABCMeta(type(QWidget), ABCMeta):
@@ -35,5 +36,6 @@ def create_application() -> QApplication:
     app.setStyle(QStyleFactory.create("Fusion"))
     app.setFont(QFont("Segoe UI", 10))
     apply_theme(app, saved_theme())
+    install_i18n(app)
 
     return app

@@ -29,12 +29,15 @@ from modules.util.config.TrainConfig import TrainConfig
 from modules.util.enum.ModelType import ModelType
 from modules.util.enum.TrainingMethod import TrainingMethod
 from modules.util.ui import pyside6_components
+from modules.util.ui.pyside6_i18n import (
+    current_language, retranslate_tree, set_language, set_localized_text, translate as tr,
+)
 from modules.util.ui.pyside6_navigation import WorkflowNavigation
 from modules.util.ui.pyside6_theme import apply_theme, saved_theme
 from modules.util.ui.pyside6_util import QtABCMeta
 from modules.util.ui.PySide6UIState import PySide6UIState
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -142,9 +145,11 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
 
         self.navigation.page_selected.connect(self._show_navigation_page)
         self.navigation.theme_requested.connect(self._change_theme)
+        self.navigation.language_requested.connect(self._change_language)
         self.navigation.help_requested.connect(self.top_bar_component.open_wiki)
         app = QApplication.instance()
         self.navigation.set_theme(app.property("onetrainerTheme") or saved_theme())
+        self.navigation.set_language(current_language())
         self.tabview.currentChanged.connect(self._sync_navigation_selection)
 
         bottom = self._build_bottom_bar(main_area)
@@ -168,8 +173,8 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         if self.controller.training_thread is not None and self.controller.training_thread.is_alive():
             QMessageBox.warning(
                 self,
-                "Training in progress",
-                "A training is currently running. Stop the training before closing the window.",
+                tr("Training in progress"),
+                tr("A training is currently running. Stop the training before closing the window."),
             )
             event.ignore()
             return
@@ -178,11 +183,38 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         self._workspace_dir_var.unsubscribe(self._workspace_dir_subscription_id)
         event.accept()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        QTimer.singleShot(0, self._fit_action_labels)
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.LanguageChange:
+            self._fit_action_labels()
+
+    def _fit_action_labels(self):
+        if not getattr(self, "top_bar_component", None):
+            return
+        self.top_bar_component.fit_action_labels()
+        if getattr(self, "training_tab", None):
+            self.training_tab.fit_advanced_button_labels()
+        bottom = self.findChild(QWidget, "trainingBottomBar")
+        if bottom is None:
+            return
+        layout = bottom.layout()
+        for column in (3, 4, 5, 6):
+            item = layout.itemAtPosition(0, column)
+            button = item.widget() if item is not None else None
+            if button is not None:
+                button.setMinimumWidth(button.sizeHint().width() + 4)
+                button.updateGeometry()
+        layout.invalidate()
+
     # --- BaseTrainUIView abstract method implementations ---
 
     def on_update_status(self, status: str):
         # Called from training thread — defer to main thread
-        self.schedule_on_main_thread(lambda: self.status_label.setText(status))
+        self.schedule_on_main_thread(lambda: self.status_label.setText(tr(status)))
 
     def on_training_started(self):
         self._set_training_button_style("running")
@@ -201,7 +233,10 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
     def _do_update_progress(self, epoch_step: int, max_step: int, epoch: int, max_epoch: int, eta_str: str | None):
         self.set_step_progress(epoch_step, max_step)
         self.set_epoch_progress(epoch, max_epoch)
-        self.eta_label.setText(f"ETA: {eta_str}" if eta_str is not None else "")
+        if eta_str is None:
+            self.eta_label.setText("")
+        else:
+            set_localized_text(self.eta_label, "ETA: {eta_str}", eta_str=eta_str)
 
     def schedule_on_main_thread(self, fn: Callable):
         # The 3-argument form (msec, context, fn) is thread-safe: Qt marshals the call
@@ -219,12 +254,16 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
 
     def show_validation_errors(self, errors: list[str]):
         bullet_list = "\n".join(f"• {e}" for e in errors)
-        QMessageBox.critical(self, "Cannot Start Training",
-                             f"Please fix the following errors before training:\n\n{bullet_list}")
+        QMessageBox.critical(
+            self, tr("Cannot Start Training"),
+            tr("Please fix the following errors before training:\n\n{bullet_list}").format(
+                bullet_list=bullet_list,
+            ),
+        )
 
     def confirm(self, title: str, message: str) -> bool:
         buttons = QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
-        return QMessageBox.question(self, title, message, buttons) == QMessageBox.StandardButton.Ok
+        return QMessageBox.question(self, tr(title), tr(message), buttons) == QMessageBox.StandardButton.Ok
 
     def open_dataset_tool(self):
         self.wait_window(self.controller.open_dataset_tool(self, PySide6CaptionUIView))
@@ -487,6 +526,7 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         }
         self.navigation.set_pages(available)
         self._sync_navigation_selection()
+        retranslate_tree(self.navigation)
 
     def _sync_navigation_selection(self, _index: int | None = None):
         if self.navigation is None or self.tabview is None:
@@ -495,12 +535,18 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         key = next((key for key, page in self._tab_widgets.items() if page is current), None)
         self.navigation.select_page(key)
         title, subtitle = self.PAGE_COPY.get(key, ("OneTrainer", ""))
-        self.page_heading.setText(title)
-        self.page_subtitle.setText(subtitle)
+        self.page_heading.setText(tr(title))
+        self.page_subtitle.setText(tr(subtitle))
 
     def _change_theme(self, theme: str):
         apply_theme(QApplication.instance(), theme, persist=True)
         self.navigation.set_theme(theme)
+
+    def _change_language(self, language: str):
+        set_language(QApplication.instance(), language, persist=True)
+        self.navigation.set_language(language)
+        self._sync_navigation_selection()
+        self._fit_action_labels()
 
     def _show_navigation_page(self, key: str):
         page = self._tab_widgets.get(key)
@@ -525,18 +571,9 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         top_lo.setContentsMargins(pyside6_components.PAD, pyside6_components.PAD, pyside6_components.PAD, pyside6_components.PAD)
 
         sub_frame = QWidget(top_frame)
-        pyside6_components._layout(top_frame).addWidget(sub_frame, 1, 0, 1, 8)
+        top_lo.addWidget(sub_frame, 2, 0, 1, 4)
 
         self.build_sampling_tab_header(top_frame, sub_frame, self.controller, self.ui_state)
-        # Keep the shared fields and bindings, but split the formerly eight
-        # column header into two rows so it cannot widen every tab.
-        header_fields = [top_lo.itemAtPosition(0, column).widget() for column in range(8)]
-        for field in header_fields:
-            top_lo.removeWidget(field)
-        top_lo.removeWidget(sub_frame)
-        for index, field in enumerate(header_fields):
-            top_lo.addWidget(field, index // 4, index % 4)
-        top_lo.addWidget(sub_frame, 2, 0, 1, 4)
         top_lo.setColumnStretch(1, 1)
         top_lo.setColumnStretch(3, 1)
         pyside6_components._layout(sub_frame).setColumnStretch(4, 1)
@@ -615,7 +652,7 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
             "stopping": ("Stopping...", False, "stopTrainingAction"),
         }
         text, enabled, role = styles.get(mode, styles["idle"])
-        self.training_button.setText(text)
+        self.training_button.setText(tr(text))
         self.training_button.setEnabled(enabled)
         if self.training_button.objectName() != role:
             self.training_button.setObjectName(role)
@@ -625,14 +662,14 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
 
     def export_training(self):
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Export Training Config", "config.json",
-            "JSON Files (*.json);;All Files (*.*)"
+            self, tr("Export Training Config"), "config.json",
+            tr("JSON Files (*.json);;All Files (*.*)")
         )
         if file_path:
             self.controller.export_training(file_path)
 
     def generate_debug_package(self):
-        dir_path = QFileDialog.getExistingDirectory(self, "Select Directory to Save Debug Package", ".")
+        dir_path = QFileDialog.getExistingDirectory(self, tr("Select Directory to Save Debug Package"), ".")
         if not dir_path:
             return
         self.controller.generate_debug_package(Path(dir_path) / "OneTrainer_debug_report.zip")

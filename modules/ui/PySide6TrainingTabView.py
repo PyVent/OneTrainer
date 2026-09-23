@@ -7,10 +7,11 @@ from modules.ui.SchedulerParamsWindowController import SchedulerParamsWindowCont
 from modules.ui.TimestepDistributionWindowController import TimestepDistributionWindowController
 from modules.ui.TrainingTabController import TrainingTabController
 from modules.util.ui import pyside6_components
+from modules.util.ui.pyside6_i18n import translate as tr
 from modules.util.ui.pyside6_util import QtABCMeta
 
 from PySide6.QtCore import QEvent
-from PySide6.QtWidgets import QGroupBox, QLabel, QPushButton, QScrollArea, QSizePolicy, QWidget
+from PySide6.QtWidgets import QGroupBox, QScrollArea, QSizePolicy, QWidget
 
 
 class PySide6TrainingTabView(BaseTrainingTabView, QWidget, metaclass=QtABCMeta):
@@ -65,7 +66,7 @@ class PySide6TrainingTabView(BaseTrainingTabView, QWidget, metaclass=QtABCMeta):
         pyside6_components._layout(column_2).setColumnStretch(0, 1)
 
         self.build(column_0, column_1, column_2, self.controller, self.ui_state)
-        self._label_advanced_buttons(frame)
+        self._label_advanced_buttons()
 
         for col_widget in (column_0, column_1, column_2):
             lo = pyside6_components._layout(col_widget)
@@ -87,23 +88,22 @@ class PySide6TrainingTabView(BaseTrainingTabView, QWidget, metaclass=QtABCMeta):
         pyside6_components._layout(parent).addWidget(section, row, 0)
         return section
 
-    def _label_advanced_buttons(self, frame):
-        for label in frame.findChildren(QLabel):
-            if label.text() not in {"Optimizer", "Learning Rate Scheduler", "Timestep Distribution"}:
-                continue
-            grid = label.parentWidget().layout()
-            index = grid.indexOf(label)
-            if index < 0:
-                continue
-            row, column, _, _ = grid.getItemPosition(index)
-            item = grid.itemAtPosition(row, column + 1)
-            if item is None or item.widget() is None:
-                continue
-            button = item.widget().findChild(QPushButton)
-            if button is not None:
-                button.setText("Settings")
-                button.setFixedWidth(max(76, button.fontMetrics().horizontalAdvance("Settings") + 20))
-                button.setToolTip(f"Configure {label.text().lower()}")
+    def _label_advanced_buttons(self):
+        for button, subject in (
+            (self.optimizer_adv_comp, "optimizer"),
+            (self.lr_scheduler_adv_comp, "learning rate scheduler"),
+            (self.timestep_distribution_adv_comp, "timestep distribution"),
+        ):
+            button.setText(tr("Settings"))
+            button.setFixedWidth(max(76, button.sizeHint().width() + 4))
+            button.setToolTip(f"Configure {subject}")
+
+    def fit_advanced_button_labels(self):
+        for button in (
+            self.optimizer_adv_comp, self.lr_scheduler_adv_comp,
+            self.timestep_distribution_adv_comp,
+        ):
+            button.setFixedWidth(max(76, button.sizeHint().width() + 4))
 
     def eventFilter(self, watched, event):
         if self.scroll_frame is not None and watched is self.scroll_frame.viewport():

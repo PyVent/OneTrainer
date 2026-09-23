@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QApplication, QLineEdit, QTabWidget, QTextEdit
 
 from modules.ui.PySide6VideoToolUIView import PySide6VideoToolUIView
 from modules.ui.VideoToolUIController import VideoToolUIController
+from modules.util.ui.pyside6_i18n import current_language, set_language
 
 
 class VideoToolUiTest(unittest.TestCase):
@@ -62,6 +63,25 @@ class VideoToolUiTest(unittest.TestCase):
                 self.assertFalse(window._preview_label.pixmap().isNull())
             finally:
                 os.chdir(previous_dir)
+
+    def test_dynamic_preview_and_status_switch_language_without_changing_filename(self):
+        previous_language = current_language()
+        window = PySide6VideoToolUIView(None, VideoToolUIController())
+        self.addCleanup(window.close)
+        try:
+            window.show()
+            set_language(self.app, "ru", persist=False)
+            self.assertEqual(window.findChild(QTabWidget).tabText(2), "Скачивание")
+            window.update_status("Found {count} videos to process", count=2)
+            window.update_preview(Image.new("RGB", (12, 12), "red"), "Sample\nFrames: 1-2\nSize: 12x12")
+            self.app.processEvents()
+            self.assertIn("Найдено видео для обработки: 2", window._status_box.toPlainText())
+            self.assertEqual(window._preview_caption_label.text(), "Sample\nКадров: 1-2\nРазмер: 12x12")
+
+            set_language(self.app, "en", persist=False)
+            self.assertEqual(window._preview_caption_label.text(), "Sample\nFrames: 1-2\nSize: 12x12")
+        finally:
+            set_language(self.app, previous_language, persist=False)
 
 
 if __name__ == "__main__":

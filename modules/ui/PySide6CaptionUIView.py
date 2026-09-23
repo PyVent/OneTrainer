@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
 
 from modules.ui.PySide6GenerateCaptionsWindowView import PySide6GenerateCaptionsWindowView
 from modules.ui.PySide6GenerateMasksWindowView import PySide6GenerateMasksWindowView
+from modules.util.ui.pyside6_i18n import translate as tr
 
 
 class _MaskPreview(QLabel):
@@ -199,7 +200,7 @@ class PySide6CaptionUIView(QDialog):
         finally:
             self.file_list.blockSignals(False)
         self.image_label.clear()
-        self.image_label.setText("No images in this folder")
+        self.image_label.setText(tr("No images in this folder"))
         self.prompt_component.clear()
 
     def refresh_image(self):
@@ -238,7 +239,7 @@ class PySide6CaptionUIView(QDialog):
         self.show_only_mask.setChecked(not self.show_only_mask.isChecked())
 
     def open_directory(self):
-        path = QFileDialog.getExistingDirectory(self, "Choose image folder", self.controller.dir or "")
+        path = QFileDialog.getExistingDirectory(self, tr("Choose image folder"), self.controller.dir or "")
         if path:
             self.controller.dir = path
             self.controller.load_directory(self.include_subdirectories.isChecked())
@@ -261,7 +262,7 @@ class PySide6CaptionUIView(QDialog):
         self.controller.open_in_explorer()
 
     def show_help(self):
-        QMessageBox.information(self, "Dataset Tool shortcuts", self.controller.help_text)
+        QMessageBox.information(self, tr("Dataset Tool shortcuts"), tr(self.controller.help_text))
 
     def done(self, result):
         self.controller._release_models()

@@ -4,6 +4,7 @@ from pathlib import Path
 from modules.ui.BaseConceptWindowView import BaseConceptWindowView
 from modules.ui.ConceptWindowController import ConceptWindowController
 from modules.util.ui import pyside6_components
+from modules.util.ui.pyside6_i18n import set_localized_text
 
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
@@ -117,7 +118,8 @@ class PySide6ConceptWindowView(BaseConceptWindowView, QDialog):
         pb_lo.addWidget(next_btn, 1, 2)
         pb_lo.addWidget(self._aug_checkbox, 2, 0, 1, 3)
 
-        self._filename_label = QLabel(filename_preview, preview_panel)
+        self._filename_label = QLabel(preview_panel)
+        self._set_preview_filename(filename_preview)
         self._filename_label.setWordWrap(True)
         self._filename_label.setFixedWidth(300)
         pb_lo.addWidget(self._filename_label, 3, 0, 1, 3)
@@ -206,6 +208,14 @@ class PySide6ConceptWindowView(BaseConceptWindowView, QDialog):
             self._reflow_image_preview(event.size().width())
         return super().eventFilter(watched, event)
 
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.LanguageChange and self.bucket_fig is not None:
+            # Matplotlib labels are outside Qt's widget translation tree.
+            stats = self.controller.concept.concept_stats
+            if isinstance(stats, dict) and "aspect_buckets" in stats:
+                self._update_concept_stats(self.controller)
+
     def _reflow_image_preview(self, width: int):
         mode = "side_by_side" if width >= 1000 else "stacked"
         if mode == self._image_layout_mode:
@@ -241,8 +251,18 @@ class PySide6ConceptWindowView(BaseConceptWindowView, QDialog):
             self.image_preview_file_index, self._preview_augmentations
         )
         self._image_label.setPixmap(self._preview_pixmap(image_preview))
-        self._filename_label.setText(filename_preview)
+        self._set_preview_filename(filename_preview)
         self._caption_box.setPlainText(caption_preview)
+
+    def _set_preview_filename(self, filename: str):
+        if filename == "No images in this concept yet":
+            self._filename_label.setProperty("_onetrainer_i18n_keep_native", False)
+            set_localized_text(self._filename_label, filename)
+        else:
+            # A real filename belongs to the user and must remain verbatim.
+            self._filename_label.setProperty("_onetrainer_i18n_keep_native", True)
+            self._filename_label.setProperty("_onetrainer_i18n_template", None)
+            self._filename_label.setText(filename)
 
     def _preview_pixmap(self, image):
         if getattr(self.controller, "preview_is_placeholder", False):

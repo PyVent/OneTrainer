@@ -299,9 +299,12 @@ class BaseTrainingTabView(ABC):
         # optimizer
         self.components.label(frame, 0, 0, "Optimizer",
                               tooltip="The type of optimizer")
-        self.components.options_adv(frame, 0, 1, [str(x) for x in list(Optimizer)], ui_state, "optimizer.optimizer",
-                                    command=self.restore_optimizer_config,
-                                    adv_command=self.open_optimizer_params)
+        _, optimizer_controls = self.components.options_adv(
+            frame, 0, 1, [str(x) for x in list(Optimizer)], ui_state, "optimizer.optimizer",
+            command=self.restore_optimizer_config,
+            adv_command=self.open_optimizer_params,
+        )
+        self.optimizer_adv_comp = optimizer_controls['button_component']
 
         # learning rate scheduler
         # Wackiness will ensue when reloading configs if we don't check and clear this first.
@@ -740,9 +743,11 @@ class BaseTrainingTabView(ABC):
         self.components.label(frame, 3, 0, "Timestep Distribution",
                               tooltip="Selects the function to sample timesteps during training",
                               wide_tooltip=True)
-        self.components.options_adv(frame, 3, 1, [str(x) for x in list(TimestepDistribution)], ui_state,
-                                    "timestep_distribution",
-                                    adv_command=self.open_timestep_distribution)
+        _, timestep_controls = self.components.options_adv(
+            frame, 3, 1, [str(x) for x in list(TimestepDistribution)], ui_state,
+            "timestep_distribution", adv_command=self.open_timestep_distribution,
+        )
+        self.timestep_distribution_adv_comp = timestep_controls['button_component']
 
         # min noising strength
         self.components.label(frame, 4, 0, "Min Noising Strength",

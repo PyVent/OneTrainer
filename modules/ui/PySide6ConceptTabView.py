@@ -5,9 +5,10 @@ from modules.ui.PySide6ConfigListView import PySide6ConfigListView
 from modules.util.ui import pyside6_components
 from modules.util.ui.PySide6UIState import PySide6UIState
 from modules.util.ui.QtVar import QtVar
+from modules.util.ui.pyside6_i18n import translate as tr
 
 from PIL.ImageQt import ImageQt
-from PySide6.QtCore import QEvent, QObject, Qt, QTimer
+from PySide6.QtCore import QEvent, QObject, QSignalBlocker, Qt, QTimer
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QCheckBox, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
 
@@ -101,19 +102,27 @@ class PySide6ConceptTabView(PySide6ConfigListView, BaseConceptTabView):
         )
 
         filter_combo = pyside6_components.NoScrollComboBox(toolbar)
-        filter_combo.addItems(self._FILTER_TYPES)
+        for key in self._FILTER_TYPES:
+            filter_combo.addItem(tr(key), key)
+        filter_combo.setProperty("_i18n_combo_sources", list(self._FILTER_TYPES))
         filter_combo.setMinimumWidth(120)
         row_lo.addWidget(QLabel("Type:", toolbar), 0, 2)
         row_lo.addWidget(filter_combo, 0, 3)
 
-        def _on_filter(text):
-            self.filter_var.set(text)
+        def _on_filter(index):
+            if index < 0:
+                return
+            self.filter_var.set(filter_combo.itemData(index))
             self._update_filters()
-        filter_combo.currentTextChanged.connect(_on_filter)
-        self.filter_var.subscribe(
-            lambda v: filter_combo.setCurrentText(v) if filter_combo.currentText() != v else None,
-            owner=filter_combo,
-        )
+        filter_combo.currentIndexChanged.connect(_on_filter)
+
+        def _sync_filter(value):
+            index = filter_combo.findData(value)
+            if index >= 0 and filter_combo.currentIndex() != index:
+                with QSignalBlocker(filter_combo):
+                    filter_combo.setCurrentIndex(index)
+
+        self.filter_var.subscribe(_sync_filter, owner=filter_combo)
 
         show_disabled_cb = QCheckBox("Show Disabled", toolbar)
         show_disabled_cb.setChecked(True)

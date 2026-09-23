@@ -9,6 +9,7 @@ from modules.util.enum.TimeUnit import TimeUnit
 from modules.util.path_util import supported_image_extensions, supported_video_extensions
 from modules.util.ui.pyside6_validation import PySide6FieldValidator, PySide6PathValidator
 from modules.util.ui.UIState import BaseUIState
+from modules.util.ui.pyside6_i18n import translate
 
 from PySide6.QtCore import QPoint, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPen, QPixmap, QWheelEvent
@@ -404,7 +405,7 @@ def layer_filter_entry(
         preset_set_layer_choice, owner=frame
     )
 
-    preset_set_layer_choice(layer_selector.currentText())
+    preset_set_layer_choice(layer_selector.itemData(layer_selector.currentIndex()))
 
     return frame
 
@@ -608,30 +609,34 @@ def options(
 ) -> QComboBox:
     var = ui_state.get_var(var_name)
     combo = NoScrollComboBox(master)
-    combo.addItems(values)
-    combo.setCurrentText(str(var.get()))
+    for value in values:
+        combo.addItem(translate(value), value)
+    combo.setProperty("_i18n_combo_sources", list(values))
+    current_index = combo.findData(str(var.get()))
+    combo.setCurrentIndex(current_index if current_index >= 0 else 0)
 
     _updating = False
 
-    def on_combo(text: str):
+    def on_combo(index: int):
         nonlocal _updating
-        if _updating:
+        if _updating or index < 0:
             return
         _updating = True
-        var.set(text)
+        value = str(combo.itemData(index))
+        var.set(value)
         _updating = False
         if command:
-            command(text)
+            command(value)
 
     def on_var(value):
         nonlocal _updating
         if _updating:
             return
         _updating = True
-        combo.setCurrentText(str(value))
+        combo.setCurrentIndex(combo.findData(str(value)))
         _updating = False
 
-    combo.currentTextChanged.connect(on_combo)
+    combo.currentIndexChanged.connect(on_combo)
     var.subscribe(on_var, owner=combo)
     _add(_layout(master), combo, row, column)
     return combo
@@ -694,41 +699,41 @@ def options_kv(
 
     _updating = False
 
-    def on_combo(key: str):
+    def on_combo(index: int):
         nonlocal _updating
-        if _updating:
+        if _updating or index < 0:
             return
         _updating = True
-        for k, v in values:
-            if key == k:
-                var.set(str(v))
-                if command:
-                    command(v)
-                break
+        selected = values[index][1]
+        var.set(str(selected))
         _updating = False
+        if command:
+            command(selected)
 
     def on_var(value):
         nonlocal _updating
         if _updating:
             return
         _updating = True
-        for k, v in values:
+        for index, (_, v) in enumerate(values):
             if str(value) == str(v):
-                combo.setCurrentText(k)
+                combo.setCurrentIndex(index)
                 if command:
                     command(v)
                 break
         _updating = False
 
     combo = NoScrollComboBox(master)
-    combo.addItems(keys)
+    for key, value in values:
+        combo.addItem(translate(key), str(value))
+    combo.setProperty("_i18n_combo_sources", keys)
     # set initial display from current var value
-    for k, v in values:
+    for index, (_, v) in enumerate(values):
         if str(var.get()) == str(v):
-            combo.setCurrentText(k)
+            combo.setCurrentIndex(index)
             break
 
-    combo.currentTextChanged.connect(on_combo)
+    combo.currentIndexChanged.connect(on_combo)
     var.subscribe(on_var, owner=combo)
     _add(_layout(master), combo, row, column, sticky=sticky)
 

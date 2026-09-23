@@ -7,6 +7,8 @@ from PySide6.QtWidgets import (
     QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
+from modules.util.ui.pyside6_i18n import set_localized_text, translate as tr
+
 
 class _BatchGenerationThread(QThread):
     failed = Signal(str)
@@ -58,11 +60,14 @@ class PySide6GenerateMasksWindowView(QDialog):
         self.prompt = QLineEdit(self)
         form.addRow("Prompt", self.prompt)
         self.mode = QComboBox(self)
-        self.mode.addItems([
+        mode_names = [
             "Replace all masks", "Create if absent", "Add to existing",
             "Subtract from existing", "Blend with existing",
-        ])
-        self.mode.setCurrentText("Create if absent")
+        ]
+        for name in mode_names:
+            self.mode.addItem(tr(name), name)
+        self.mode.setProperty("_i18n_combo_sources", mode_names)
+        self.mode.setCurrentIndex(self.mode.findData("Create if absent"))
         form.addRow("Mode", self.mode)
 
         self.threshold = QDoubleSpinBox(self)
@@ -101,7 +106,7 @@ class PySide6GenerateMasksWindowView(QDialog):
         layout.addWidget(self.create_button)
 
     def browse_for_path(self):
-        path = QFileDialog.getExistingDirectory(self, "Choose image folder", self.path.text())
+        path = QFileDialog.getExistingDirectory(self, tr("Choose image folder"), self.path.text())
         if path:
             self.path.setText(path)
 
@@ -112,19 +117,20 @@ class PySide6GenerateMasksWindowView(QDialog):
     def _apply_progress(self, value, max_value):
         self.progress.setRange(0, max(1, max_value))
         self.progress.setValue(value)
-        self.progress_label.setText(f"Progress: {value}/{max_value}")
+        set_localized_text(self.progress_label, "Progress: {value}/{max_value}",
+                           value=value, max_value=max_value)
 
     def create_masks(self):
         if self._running:
             return
         if not os.path.isdir(self.path.text()):
-            QMessageBox.warning(self, "Invalid folder", "Choose an existing image folder.")
+            QMessageBox.warning(self, tr("Invalid folder"), tr("Choose an existing image folder."))
             return
         options = dict(
             model_name=self.model.currentText(),
             path=self.path.text(),
             prompt=self.prompt.text(),
-            mode_str=self.mode.currentText(),
+            mode_str=self.mode.currentData(),
             alpha_str=str(self.alpha.value()),
             threshold_str=str(self.threshold.value()),
             smooth_str=str(self.smooth.value()),
@@ -140,7 +146,7 @@ class PySide6GenerateMasksWindowView(QDialog):
 
     @Slot(str)
     def _on_failed(self, message):
-        QMessageBox.critical(self, "Mask generation failed", message)
+        QMessageBox.critical(self, tr("Mask generation failed"), tr(message))
 
     @Slot()
     def _on_finished(self):

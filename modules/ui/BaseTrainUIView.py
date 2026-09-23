@@ -252,16 +252,16 @@ class BaseTrainUIView(ABC):
                          tooltip="Start sampling automatically after this interval has elapsed.")
         self.components.entry(top_frame, 0, 3, ui_state, "sample_skip_first", width=50, sticky="nw")
 
-        self.components.label(top_frame, 0, 4, "Format",
+        self.components.label(top_frame, 1, 0, "Format",
                          tooltip="File Format used when saving samples")
-        self.components.options_kv(top_frame, 0, 5, [
+        self.components.options_kv(top_frame, 1, 1, [
             ("PNG", ImageFormat.PNG),
             ("JPG", ImageFormat.JPG),
         ], ui_state, "sample_image_format")
 
-        self.components.button(top_frame, 0, 6, "Sample Now", self.sample_now)
+        self.components.button(top_frame, 1, 2, "Sample Now", self.sample_now)
 
-        self.components.button(top_frame, 0, 7, "Manual Sample", self.open_manual_sample_window)
+        self.components.button(top_frame, 1, 3, "Manual Sample", self.open_manual_sample_window)
 
         self.components.label(sub_frame, 0, 0, "Non-EMA Sampling",
                          tooltip="Whether to include non-ema sampling when using ema.")

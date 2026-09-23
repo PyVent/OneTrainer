@@ -1,17 +1,18 @@
 from modules.ui.AdditionalEmbeddingsTabController import AdditionalEmbeddingsTabController
-from modules.ui.BaseAdditionalEmbeddingsTabView import BaseAdditionalEmbeddingsTabView, BaseEmbeddingWidgetView
+from modules.ui.BaseAdditionalEmbeddingsTabView import BaseAdditionalEmbeddingsTabView
 from modules.ui.PySide6ConfigListView import PySide6ConfigListView
+from modules.util import path_util
 from modules.util.ui import pyside6_components
 from modules.util.ui.PySide6UIState import PySide6UIState
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -35,24 +36,16 @@ class PySide6AdditionalEmbeddingsTabView(PySide6ConfigListView, BaseAdditionalEm
         return PySide6EmbeddingWidgetView(master, element, i, open_command, remove_command, clone_command, save_command, self.controller)
 
 
-class PySide6EmbeddingWidgetView(BaseEmbeddingWidgetView, QWidget):
+class PySide6EmbeddingWidgetView(QWidget):
 
     def __init__(self, master, element, i, open_command, remove_command, clone_command, save_command, controller):
-        QWidget.__init__(self, master)
-        BaseEmbeddingWidgetView.__init__(self, pyside6_components)
+        super().__init__(master)
 
         self.element = element
-        ui_state = PySide6UIState(element)
+        self.ui_state = PySide6UIState(element)
+        self.i = i
+        self.save_command = save_command
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
-
-        # Let the shared builder create and bind every control, then move the
-        # existing Qt widgets into a compact layout. No field rules are copied.
-        top_frame = QWidget(self)
-        bottom_frame = QWidget(self)
-        self.build_content(top_frame, bottom_frame, ui_state, i, save_command, remove_command, clone_command, controller)
-
-        top = self._take_row(top_frame)
-        bottom = self._take_row(bottom_frame)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
@@ -68,39 +61,44 @@ class PySide6EmbeddingWidgetView(BaseEmbeddingWidgetView, QWidget):
 
         actions = QHBoxLayout()
         actions.addStretch(1)
-        top[1].setIcon(QIcon())
-        top[1].setText("Copy")
-        top[1].setFixedSize(max(64, top[1].fontMetrics().horizontalAdvance("Copy") + 20), 38)
-        top[0].setIcon(QIcon())
-        top[0].setText("Remove")
-        top[0].setFixedSize(max(76, top[0].fontMetrics().horizontalAdvance("Remove") + 20), 38)
-        top[1].setAccessibleName("Clone embedding")
-        top[0].setAccessibleName("Remove embedding")
-        actions.addWidget(top[1])
-        actions.addWidget(top[0])
+        copy = QPushButton("Copy", group)
+        copy.setObjectName("copyAction")
+        copy.setAccessibleName("Clone embedding")
+        copy.setFixedSize(max(64, copy.fontMetrics().horizontalAdvance(copy.text()) + 20), 38)
+        copy.clicked.connect(lambda: clone_command(self.i, controller.randomize_uuid))
+        remove = QPushButton("Remove", group)
+        remove.setObjectName("removeAction")
+        remove.setAccessibleName("Remove embedding")
+        remove.setFixedSize(max(76, remove.fontMetrics().horizontalAdvance(remove.text()) + 20), 38)
+        remove.clicked.connect(lambda: remove_command(self.i))
+        actions.addWidget(copy)
+        actions.addWidget(remove)
         group_layout.addLayout(actions)
 
         self._field_grids: list[tuple[QGridLayout, list[QWidget]]] = []
-        self._add_fields(group_layout, "Source and tokens", top, ((2, 3), (4, 5), (6, 7)))
-        self._add_fields(group_layout, "Training", bottom, ((0, 1), (2, 3), (4, 5), (6, 7)))
+        ui = self.ui_state
+        self._add_fields(group_layout, "Source and tokens", (
+            ("base embedding:", "The base embedding to train on. Leave empty to create a new embedding",
+             lambda card: pyside6_components.path_entry(card, 1, 0, ui, "model_name", mode="file", path_modifier=path_util.json_path_modifier)),
+            ("placeholder:", "The placeholder used when using the embedding in a prompt",
+             lambda card: pyside6_components.entry(card, 1, 0, ui, "placeholder")),
+            ("token count:", "The token count used when creating a new embedding. Leave empty to auto detect from the initial embedding text.",
+             lambda card: pyside6_components.entry(card, 1, 0, ui, "token_count", width=40)),
+        ))
+        self._add_fields(group_layout, "Training", (
+            ("train:", "", lambda card: pyside6_components.switch(card, 1, 0, ui, "train", command=save_command, width=40)),
+            ("output embedding:", "Output embeddings are calculated at the output of the text encoder, not the input. This can improve results for larger text encoders and lower VRAM usage.",
+             lambda card: pyside6_components.switch(card, 1, 0, ui, "is_output_embedding", width=40)),
+            ("stop training after:", "When to stop training the embedding",
+             lambda card: pyside6_components.time_entry(card, 1, 0, ui, "stop_training_after", "stop_training_after_unit")),
+            ("initial embedding text:", "The initial embedding text used when creating a new embedding",
+             lambda card: pyside6_components.entry(card, 1, 0, ui, "initial_embedding_text")),
+        ))
 
         self._column_count = 0
         self._reflow()
-        top_frame.deleteLater()
-        bottom_frame.deleteLater()
 
-    @staticmethod
-    def _take_row(frame: QWidget) -> dict[int, QWidget]:
-        layout = frame.layout()
-        widgets = {
-            layout.getItemPosition(index)[1]: layout.itemAt(index).widget()
-            for index in range(layout.count())
-        }
-        while layout.count():
-            layout.takeAt(0)
-        return widgets
-
-    def _add_fields(self, parent_layout: QVBoxLayout, heading: str, widgets: dict[int, QWidget], pairs):
+    def _add_fields(self, parent_layout: QVBoxLayout, heading: str, fields):
         title = QLabel(heading, self)
         font = title.font()
         font.setBold(True)
@@ -111,17 +109,16 @@ class PySide6EmbeddingWidgetView(BaseEmbeddingWidgetView, QWidget):
         field_grid.setHorizontalSpacing(16)
         field_grid.setVerticalSpacing(8)
         cards = []
-        for label_column, control_column in pairs:
+        for label_text, tooltip, make_control in fields:
             card = QFrame(self)
             card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-            card_layout = QVBoxLayout(card)
+            card_layout = pyside6_components._layout(card)
             card_layout.setContentsMargins(0, 0, 0, 0)
-            card_layout.setSpacing(4)
-            label = widgets[label_column]
-            if isinstance(label, QLabel):
-                label.setWordWrap(True)
-            card_layout.addWidget(label)
-            card_layout.addWidget(widgets[control_column])
+            card_layout.setVerticalSpacing(4)
+            card_layout.setColumnStretch(0, 1)
+            label = pyside6_components.label(card, 0, 0, label_text, tooltip=tooltip)
+            label.setWordWrap(True)
+            make_control(card)
             cards.append(card)
         parent_layout.addLayout(field_grid)
         self._field_grids.append((field_grid, cards))

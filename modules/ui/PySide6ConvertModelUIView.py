@@ -4,6 +4,7 @@ from modules.ui.BaseConvertModelUIView import BaseConvertModelUIView
 from modules.ui.ConvertModelUIController import ConvertModelUIController
 from modules.util.ui import pyside6_components
 from modules.util.ui.PySide6UIState import PySide6UIState
+from modules.util.ui.pyside6_i18n import set_localized_text, translate as tr
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from PySide6.QtWidgets import QDialog, QGridLayout, QLabel, QLayout, QWidget
@@ -94,7 +95,7 @@ class PySide6ConvertModelUIView(BaseConvertModelUIView, QDialog):
 
         self._conversion_result = None
         self._set_status_error(False)
-        self._status_label.setText("Converting model...")
+        self._status_label.setText(tr("Converting model..."))
         self.set_converting(True)
 
         thread = QThread(self)
@@ -119,9 +120,9 @@ class PySide6ConvertModelUIView(BaseConvertModelUIView, QDialog):
     def _conversion_thread_finished(self):
         success, error = self._conversion_result or (False, "Conversion stopped unexpectedly")
         if success:
-            self._status_label.setText("Model converted")
+            self._status_label.setText(tr("Model converted"))
         else:
-            self._status_label.setText(f"Conversion failed: {error}")
+            set_localized_text(self._status_label, "Conversion failed: {error}", error=error)
             self._set_status_error(True)
         self.set_converting(False)
         self._conversion_thread = None
@@ -132,13 +133,13 @@ class PySide6ConvertModelUIView(BaseConvertModelUIView, QDialog):
 
     def reject(self):
         if self._conversion_running():
-            self._status_label.setText("Conversion is still running")
+            self._status_label.setText(tr("Conversion is still running"))
             return
         super().reject()
 
     def closeEvent(self, event):
         if self._conversion_running():
-            self._status_label.setText("Conversion is still running")
+            self._status_label.setText(tr("Conversion is still running"))
             event.ignore()
             return
         super().closeEvent(event)

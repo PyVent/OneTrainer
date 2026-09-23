@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from modules.util.ui.pyside6_theme import COLORS
+from modules.util.ui.pyside6_i18n import current_language, retranslate_tree
 
 
 def _icon(name: str, color: str) -> QIcon:
@@ -79,6 +80,7 @@ def _icon(name: str, color: str) -> QIcon:
 class WorkflowNavigation(QFrame):
     page_selected = Signal(str)
     theme_requested = Signal(str)
+    language_requested = Signal(str)
     help_requested = Signal()
 
     SECTIONS = (
@@ -160,11 +162,30 @@ class WorkflowNavigation(QFrame):
             theme_layout.addWidget(button, 1)
         outer.addWidget(theme_row)
 
+        language_heading = QLabel("LANGUAGE", self)
+        language_heading.setObjectName("navSection")
+        outer.addWidget(language_heading)
+        language_row = QWidget(self)
+        language_layout = QHBoxLayout(language_row)
+        language_layout.setContentsMargins(0, 0, 0, 0)
+        language_layout.setSpacing(6)
+        self.russian_button = QPushButton("Русский", language_row)
+        self.english_button = QPushButton("English", language_row)
+        for button, language in ((self.russian_button, "ru"), (self.english_button, "en")):
+            button.setObjectName("navLanguage")
+            button.setCheckable(True)
+            button.setProperty("_onetrainer_i18n_keep_native", True)
+            button.setAccessibleName("Switch to Russian" if language == "ru" else "Switch to English")
+            button.clicked.connect(lambda _checked, selected=language: self.language_requested.emit(selected))
+            language_layout.addWidget(button, 1)
+        outer.addWidget(language_row)
+
         self.help_button = QPushButton("Help && Docs", self)
         self.help_button.setObjectName("navHelp")
         self.help_button.clicked.connect(self.help_requested)
         outer.addWidget(self.help_button)
         self.set_theme("light")
+        self.set_language(current_language())
 
     def sizeHint(self) -> QSize:
         return QSize(242, 700)
@@ -195,6 +216,14 @@ class WorkflowNavigation(QFrame):
             self._list_layout.addSpacing(9)
         self._list_layout.addStretch(1)
         self.select_page(self._selected if self._selected in self._items else None)
+        retranslate_tree(self)
+
+    def set_language(self, language: str):
+        if language not in ("ru", "en"):
+            raise ValueError(language)
+        self.russian_button.setChecked(language == "ru")
+        self.english_button.setChecked(language == "en")
+        retranslate_tree(self)
 
     def select_page(self, key: str | None):
         self._selected = key
@@ -232,9 +261,9 @@ class WorkflowNavigation(QFrame):
             QPushButton#navPage:checked {{ background: {active_background};
                 color: {active_text}; font-weight: 700; }}
             QFrame#navDivider {{ background: {c['border']}; border: none; }}
-            QPushButton#navTheme {{ border: 1px solid {c['border']}; border-radius: 7px;
+            QPushButton#navTheme, QPushButton#navLanguage {{ border: 1px solid {c['border']}; border-radius: 7px;
                 background: {c['window']}; color: {c['muted']}; padding: 4px; }}
-            QPushButton#navTheme:checked {{ background: {c['selection']};
+            QPushButton#navTheme:checked, QPushButton#navLanguage:checked {{ background: {c['selection']};
                 color: {c['accent']}; border-color: {c['accent']}; font-weight: 700; }}
             QPushButton#navHelp {{ text-align: left; border: none; border-radius: 7px;
                 background: transparent; color: {c['muted']}; padding: 6px 8px; }}

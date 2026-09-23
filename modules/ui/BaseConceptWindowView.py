@@ -4,6 +4,7 @@ import math
 from modules.util import path_util
 from modules.util.enum.BalancingStrategy import BalancingStrategy
 from modules.util.enum.ConceptType import ConceptType
+from modules.util.ui.pyside6_i18n import set_localized_text, translate
 
 
 class BaseConceptWindowView:
@@ -319,8 +320,10 @@ class BaseConceptWindowView:
 
     def _update_concept_stats(self, controller):
         #file size
-        self.components.set_label_text(self.file_size_preview, str(int(controller.concept.concept_stats["file_size"]/1048576)) + " MB")
-        self.components.set_label_text(self.processing_time, str(round(controller.concept.concept_stats["processing_time"], 2)) + " s")
+        set_localized_text(self.file_size_preview, "{megabytes} MB",
+                           megabytes=int(controller.concept.concept_stats["file_size"]/1048576))
+        set_localized_text(self.processing_time, "{seconds} s",
+                           seconds=round(controller.concept.concept_stats["processing_time"], 2))
 
         #directory count
         self.components.set_label_text(self.dir_count_preview, controller.concept.concept_stats["directory_count"])
@@ -357,9 +360,13 @@ class BaseConceptWindowView:
             self.components.set_label_text(self.pixel_min_preview, "-")
         else:
             #formatted as (#pixels/1000000) MP, width x height, \n filename
-            self.components.set_label_text(self.pixel_max_preview, f'{str(round(max_pixels[0]/1000000, 2))} MP, {max_pixels[2]}\n{max_pixels[1]}')
-            self.components.set_label_text(self.pixel_avg_preview, f'{str(round(avg_pixels/1000000, 2))} MP, ~{int(math.sqrt(avg_pixels))}w x {int(math.sqrt(avg_pixels))}h')
-            self.components.set_label_text(self.pixel_min_preview, f'{str(round(min_pixels[0]/1000000, 2))} MP, {min_pixels[2]}\n{min_pixels[1]}')
+            set_localized_text(self.pixel_max_preview, "{megapixels} MP, {size}\n{name}",
+                               megapixels=round(max_pixels[0]/1000000, 2), size=max_pixels[2], name=max_pixels[1])
+            set_localized_text(self.pixel_avg_preview, "{megapixels} MP, ~{width}w x {height}h",
+                               megapixels=round(avg_pixels/1000000, 2), width=int(math.sqrt(avg_pixels)),
+                               height=int(math.sqrt(avg_pixels)))
+            set_localized_text(self.pixel_min_preview, "{megapixels} MP, {size}\n{name}",
+                               megapixels=round(min_pixels[0]/1000000, 2), size=min_pixels[2], name=min_pixels[1])
 
         #video length and fps info
         max_length = controller.concept.concept_stats["max_length"]
@@ -378,13 +385,15 @@ class BaseConceptWindowView:
             self.components.set_label_text(self.fps_min_preview, "-")
         else:
             #formatted as (#frames) frames \n filename
-            self.components.set_label_text(self.length_max_preview, f'{int(max_length[0])} frames\n{max_length[1]}')
-            self.components.set_label_text(self.length_avg_preview, f'{int(avg_length)} frames')
-            self.components.set_label_text(self.length_min_preview, f'{int(min_length[0])} frames\n{min_length[1]}')
+            set_localized_text(self.length_max_preview, "{count} frames\n{name}",
+                               count=int(max_length[0]), name=max_length[1])
+            set_localized_text(self.length_avg_preview, "{count} frames", count=int(avg_length))
+            set_localized_text(self.length_min_preview, "{count} frames\n{name}",
+                               count=int(min_length[0]), name=min_length[1])
             #formatted as (#fps) fps \n filename
-            self.components.set_label_text(self.fps_max_preview, f'{int(max_fps[0])} fps\n{max_fps[1]}')
-            self.components.set_label_text(self.fps_avg_preview, f'{int(avg_fps)} fps')
-            self.components.set_label_text(self.fps_min_preview, f'{int(min_fps[0])} fps\n{min_fps[1]}')
+            set_localized_text(self.fps_max_preview, "{count} fps\n{name}", count=int(max_fps[0]), name=max_fps[1])
+            set_localized_text(self.fps_avg_preview, "{count} fps", count=int(avg_fps))
+            set_localized_text(self.fps_min_preview, "{count} fps\n{name}", count=int(min_fps[0]), name=min_fps[1])
 
         #caption info
         max_caption_length = controller.concept.concept_stats["max_caption_length"]
@@ -397,9 +406,12 @@ class BaseConceptWindowView:
             self.components.set_label_text(self.caption_min_preview, "-")
         else:
             #formatted as (#chars) chars, (#words) words, \n filename
-            self.components.set_label_text(self.caption_max_preview, f'{max_caption_length[0]} chars, {max_caption_length[2]} words\n{max_caption_length[1]}')
-            self.components.set_label_text(self.caption_avg_preview, f'{int(avg_caption_length[0])} chars, {int(avg_caption_length[1])} words')
-            self.components.set_label_text(self.caption_min_preview, f'{min_caption_length[0]} chars, {min_caption_length[2]} words\n{min_caption_length[1]}')
+            set_localized_text(self.caption_max_preview, "{chars} chars, {words} words\n{name}",
+                               chars=max_caption_length[0], words=max_caption_length[2], name=max_caption_length[1])
+            set_localized_text(self.caption_avg_preview, "{chars} chars, {words} words",
+                               chars=int(avg_caption_length[0]), words=int(avg_caption_length[1]))
+            set_localized_text(self.caption_min_preview, "{chars} chars, {words} words\n{name}",
+                               chars=min_caption_length[0], words=min_caption_length[2], name=min_caption_length[1])
 
         #aspect bucketing
         aspect_buckets = controller.concept.concept_stats["aspect_buckets"]
@@ -412,7 +424,8 @@ class BaseConceptWindowView:
             min_aspect_buckets = {key: val for key,val in aspect_buckets.items() if val in (min_val, min_val2)}
             min_bucket_str = ""
             for key, val in min_aspect_buckets.items():
-                min_bucket_str += f'aspect {self.decimal_to_aspect_ratio(key)} : {val} img\n'
+                min_bucket_str += translate('aspect {ratio} : {count} img').format(
+                    ratio=self.decimal_to_aspect_ratio(key), count=val) + '\n'
             min_bucket_str.strip()
             self.components.set_label_text(self.small_bucket_preview, min_bucket_str)
 
@@ -424,7 +437,8 @@ class BaseConceptWindowView:
         self.bucket_ax.bar_label(b, color=self.text_color)
         sec = self.bucket_ax.secondary_xaxis(location=-0.1)
         sec.spines["bottom"].set_linewidth(0)
-        sec.set_xticks([0, (len(aspects)-1)/2, len(aspects)-1], labels=["Wide", "Square", "Tall"])
+        sec.set_xticks([0, (len(aspects)-1)/2, len(aspects)-1],
+                       labels=[translate("Wide"), translate("Square"), translate("Tall")])
         sec.tick_params('x', length=0)
         self.canvas.draw()
 

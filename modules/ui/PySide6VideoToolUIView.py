@@ -2,6 +2,7 @@ from modules.ui.BaseVideoToolUIView import BaseVideoToolUIView
 from modules.ui.VideoToolUIController import VideoToolUIController
 from modules.util.image_util import load_image
 from modules.util.ui import pyside6_components
+from modules.util.ui.pyside6_i18n import set_localized_text, translate
 from modules.util.ui.pyside6_util import QtABCMeta
 from modules.util.ui.PySide6UIState import PySide6UIState
 
@@ -122,7 +123,7 @@ class PySide6VideoToolUIView(BaseVideoToolUIView, QDialog, metaclass=QtABCMeta):
         self._status_box.setReadOnly(True)
         self._status_box.setFixedHeight(160)
         self._status_box.setMinimumWidth(300)
-        self._status_box.setPlainText("Current status")
+        self._status_box.setPlaceholderText("Current status")
         lo.addWidget(self._status_box, 0, 1, Qt.AlignTop)
 
         return frame
@@ -151,9 +152,13 @@ class PySide6VideoToolUIView(BaseVideoToolUIView, QDialog, metaclass=QtABCMeta):
     def schedule_on_main_thread(self, fn):
         QTimer.singleShot(0, self, fn)
 
-    def update_status(self, status_text: str):
+    def update_status(self, status_text: str, **values):
         # Called from the video tool's worker thread — defer to main thread
-        self.schedule_on_main_thread(lambda: self._status_box.append(status_text))
+        self.schedule_on_main_thread(
+            lambda: self._status_box.append(
+                translate(status_text).format(**values) if values else translate(status_text)
+            )
+        )
 
     def clear_status(self):
         self._status_box.clear()
@@ -167,4 +172,17 @@ class PySide6VideoToolUIView(BaseVideoToolUIView, QDialog, metaclass=QtABCMeta):
         self._preview_label.setPixmap(
             QPixmap.fromImage(image).scaled(150, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         )
-        self._preview_caption_label.setText(label_text)
+        # The first line is a filename; translate only the UI labels beneath it.
+        parts = label_text.rsplit("\n", 2)
+        if len(parts) == 3 and parts[1].startswith(("Frames: ", "Frame: ")) and parts[2].startswith("Size: "):
+            frame_label, frame_value = parts[1].split(": ", 1)
+            size_value = parts[2].removeprefix("Size: ")
+            set_localized_text(
+                self._preview_caption_label,
+                "{filename}\nFrames: {frames}\nSize: {size}" if frame_label == "Frames"
+                else "{filename}\nFrame: {frame}\nSize: {size}",
+                filename=parts[0], size=size_value,
+                **({"frames": frame_value} if frame_label == "Frames" else {"frame": frame_value}),
+            )
+        else:
+            self._preview_caption_label.setText(label_text)

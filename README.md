@@ -84,6 +84,8 @@ For a technically focused quick start, see the [Quick Start Guide](docs/QuickSta
 
 ### GUI Mode
 
+The interface starts in Russian on a fresh install. Use **Язык / Language** in the sidebar to switch between Russian and English; your choice is saved for the next launch. Training settings and configuration file values are unchanged when you switch languages.
+
 #### Windows
 
 -   To start the current PySide6 UI on Windows, navigate to the OneTrainer folder and double-click `start.bat` (`start-ui.bat` remains available for existing shortcuts).

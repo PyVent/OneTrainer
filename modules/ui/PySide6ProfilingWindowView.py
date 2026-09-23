@@ -3,6 +3,7 @@ import contextlib
 from modules.ui.BaseProfilingWindowView import BaseProfilingWindowView
 from modules.ui.ProfilingWindowController import ProfilingWindowController
 from modules.util.ui import pyside6_components
+from modules.util.ui.pyside6_i18n import translate as tr
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QGridLayout, QWidget
@@ -28,18 +29,18 @@ class PySide6ProfilingWindowView(BaseProfilingWindowView, QWidget):
         self.build_content(self, self._bottom_bar, controller)
 
     def set_message(self, text: str):
-        self._message_label.setText(text)
+        self._message_label.setText(tr(text))
 
     def set_profiling_active(self, active: bool):
         if active:
-            self._message_label.setText("Profiling active...")
-            self._profile_button.setText("End Profiling")
+            self._message_label.setText(tr("Profiling active..."))
+            self._profile_button.setText(tr("End Profiling"))
             with contextlib.suppress(RuntimeError):
                 self._profile_button.clicked.disconnect()
             self._profile_button.clicked.connect(self._controller.end_profiler)
         else:
-            self._message_label.setText("Inactive")
-            self._profile_button.setText("Start Profiling")
+            self._message_label.setText(tr("Inactive"))
+            self._profile_button.setText(tr("Start Profiling"))
             with contextlib.suppress(RuntimeError):
                 self._profile_button.clicked.disconnect()
             self._profile_button.clicked.connect(self._controller.start_profiler)

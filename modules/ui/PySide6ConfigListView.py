@@ -3,6 +3,7 @@ from abc import ABC
 
 from modules.ui.BaseConfigListView import BaseConfigListView
 from modules.util.ui import pyside6_components
+from modules.util.ui.pyside6_i18n import set_localized_text, translate as tr
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QInputDialog, QLabel, QWidget
@@ -81,16 +82,27 @@ class PySide6ConfigListView(BaseConfigListView, ABC):
             for index, _widget in enumerate(self.widgets)
         )
         if not has_visible_items:
-            noun, action = {
-                "concept_file_name": ("concepts", "Add Concept"),
-                "sample_definition_file_name": ("samples", "Add Sample"),
-                "additional_embeddings": ("embeddings", "Add Embedding"),
-            }.get(self.attr_name, ("items", "Add"))
-            empty.setText(
-                f"No {noun} to show. Use {action} above to create one."
-                if not self.current_config else
-                f"No {noun} match the current filters."
-            )
+            empty_text, filtered_text = {
+                "concept_file_name": (
+                    "No concepts to show. Use Add Concept above to create one.",
+                    "No concepts match the current filters.",
+                ),
+                "sample_definition_file_name": (
+                    "No samples to show. Use Add Sample above to create one.",
+                    "No samples match the current filters.",
+                ),
+                "additional_embeddings": (
+                    "No embeddings to show. Use Add Embedding above to create one.",
+                    "No embeddings match the current filters.",
+                ),
+            }.get(self.attr_name, (
+                "No items to show. Use Add above to create one.",
+                "No items match the current filters.",
+            ))
+            if not self.current_config:
+                set_localized_text(empty, empty_text)
+            else:
+                set_localized_text(empty, filtered_text)
         empty.setVisible(not has_visible_items)
 
     def _wait_for_window(self, window):
@@ -125,9 +137,9 @@ class PySide6ConfigListView(BaseConfigListView, ABC):
             return
         self._update_item_enabled_state()
         if self.toggle_button is not None:
-            self.toggle_button.setText("Disable" if self._is_current_item_enabled else "Enable")
+            self.toggle_button.setText(tr("Disable" if self._is_current_item_enabled else "Enable"))
 
     def _show_name_dialog(self, callback):
-        text, ok = QInputDialog.getText(self.master, "name", "Name")
+        text, ok = QInputDialog.getText(self.master, tr("name"), tr("Name"))
         if ok and text:
             callback(text)

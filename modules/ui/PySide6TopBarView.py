@@ -12,6 +12,7 @@ from modules.util.enum.ModelType import ModelType
 from modules.util.enum.TrainingMethod import TrainingMethod
 from modules.util.optimizer_util import change_optimizer
 from modules.util.ui.pyside6_components import NoScrollComboBox, PAD
+from modules.util.ui.pyside6_i18n import translate as tr
 
 
 class PySide6TopBarView(QWidget):
@@ -98,8 +99,9 @@ class PySide6TopBarView(QWidget):
     def _fill_combo(combo: NoScrollComboBox, values):
         with QSignalBlocker(combo):
             combo.clear()
+            combo.setProperty("_i18n_combo_sources", [label for label, _ in values])
             for label, value in values:
-                combo.addItem(label, value)
+                combo.addItem(tr(label), value)
 
     @staticmethod
     def _index_for_value(combo: NoScrollComboBox, value) -> int:
@@ -143,6 +145,18 @@ class PySide6TopBarView(QWidget):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._reflow()
+
+    def fit_action_labels(self):
+        """Give translated action captions their measured width."""
+        buttons = (self._preset_button, self._load_button, self._save_button)
+        for button in buttons:
+            button.setMinimumWidth(button.sizeHint().width() + 4)
+            button.updateGeometry()
+        self._actions_frame.setMinimumWidth(
+            sum(button.minimumWidth() for button in buttons) + 2 * 8
+        )
+        self._actions_frame.updateGeometry()
+        self.layout().invalidate()
 
     def _reflow(self):
         width = self.width()
@@ -200,7 +214,10 @@ class PySide6TopBarView(QWidget):
         loaded_config = self.controller.load_config_from_file(filename)
         if loaded_config is None:
             if not quiet:
-                self._show_load_error(self.controller.last_load_error or f"Could not load {filename}")
+                self._show_load_error(
+                    self.controller.last_load_error
+                    or tr("Could not load {filename}").format(filename=filename)
+                )
             return
 
         self.ui_state.update(loaded_config)
@@ -209,22 +226,22 @@ class PySide6TopBarView(QWidget):
         self.load_preset_callback()
 
     def _show_save_dialog(self, initial_dir: str, callback):
-        path, _ = QFileDialog.getSaveFileName(self, "Save config", initial_dir, "JSON (*.json)")
+        path, _ = QFileDialog.getSaveFileName(self, tr("Save config"), initial_dir, "JSON (*.json)")
         if path:
             if not path.endswith(".json"):
                 path += ".json"
             try:
                 callback(path)
             except OSError as exc:
-                QMessageBox.critical(self, "Cannot save configuration", str(exc))
+                QMessageBox.critical(self, tr("Cannot save configuration"), str(exc))
 
     def _show_open_dialog(self, initial_dir: str, callback):
-        path, _ = QFileDialog.getOpenFileName(self, "Load config", initial_dir, "JSON (*.json)")
+        path, _ = QFileDialog.getOpenFileName(self, tr("Load config"), initial_dir, "JSON (*.json)")
         if path:
             callback(path)
 
     def _show_load_error(self, message: str):
-        QMessageBox.warning(self, "Cannot load configuration", message)
+        QMessageBox.warning(self, tr("Cannot load configuration"), tr(message))
 
     def open_wiki(self):
         self.controller.open_wiki()

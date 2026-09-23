@@ -51,9 +51,9 @@ class VideoToolUIController:
         self.view = view_cls(parent, self)
         return self.view
 
-    def __update_status(self, status_text: str):
-        print(status_text)
-        self.view.update_status(status_text)
+    def __update_status(self, status_text: str, **values):
+        print(status_text.format(**values) if values else status_text)
+        self.view.update_status(status_text, **values)
 
     def __get_vid_paths(self, batch_mode: bool, input_path_single: str, input_path_dir: str):
         input_videos = []
@@ -93,7 +93,7 @@ class VideoToolUIController:
                         vid.release()
                     if ok:
                         input_videos.append(path)
-            self.__update_status(f'Found {len(input_videos)} videos to process')
+            self.__update_status('Found {count} videos to process', count=len(input_videos))
             return input_videos
 
     def __run_in_thread(self, target, *args):
@@ -110,7 +110,8 @@ class VideoToolUIController:
     def __get_safe_fps(self, video: cv2.VideoCapture, video_path: str) -> float:
         fps = video.get(cv2.CAP_PROP_FPS) or 0.0
         if fps <= 0:
-            self.__update_status(f'Warning: Could not read FPS for "{os.path.basename(video_path)}". Falling back to 30 FPS.')
+            self.__update_status('Warning: Could not read FPS for "{filename}". Falling back to 30 FPS.',
+                                 filename=os.path.basename(video_path))
             return 30.0
         return fps
 
@@ -221,9 +222,9 @@ class VideoToolUIController:
                                 crop_variation, target_fps, output_directory)
 
         if batch_mode:
-            self.__update_status(f'Clip extraction from all videos in "{p["clip_list"]}" complete')
+            self.__update_status('Clip extraction from all videos in "{path}" complete', path=p["clip_list"])
         else:
-            self.__update_status(f'Clip extraction from "{p["clip_single"]}" complete')
+            self.__update_status('Clip extraction from "{path}" complete', path=p["clip_single"])
 
     def __extract_clips(self, video_path: str, timestamp_min: str, timestamp_max: str, max_length: float,
                         split_at_cuts: bool, remove_borders: bool, crop_variation: float, target_fps: float, output_dir: str):
@@ -237,7 +238,7 @@ class VideoToolUIController:
 
         if split_at_cuts:
             #use scenedetect to find cuts, based on start/end frame number
-            self.__update_status(f'Detecting scenes in "{os.path.basename(video_path)}"')
+            self.__update_status('Detecting scenes in "{filename}"', filename=os.path.basename(video_path))
             timecode_list = scenedetect.detect(
                 video_path=str(video_path),
                 detector=scenedetect.AdaptiveDetector(),
@@ -263,7 +264,8 @@ class VideoToolUIController:
                 # Trim first/last frame to avoid transition artifacts
                 scene_list_split.append((scene[0] + 1, scene[1] - 1))
 
-        self.__update_status(f'Video "{os.path.basename(video_path)}" being split into {len(scene_list_split)} clips in "{output_dir}"')
+        self.__update_status('Video "{filename}" being split into {count} clips in "{path}"',
+                             filename=os.path.basename(video_path), count=len(scene_list_split), path=output_dir)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
             futures = [
@@ -274,7 +276,7 @@ class VideoToolUIController:
             for future in concurrent.futures.as_completed(futures):
                 exc = future.exception()
                 if exc is not None:
-                    self.__update_status(f'Error saving clip: {exc}')
+                    self.__update_status('Error saving clip: {error}', error=exc)
 
         video.release()
 
@@ -291,7 +293,8 @@ class VideoToolUIController:
         frame_number = int(video.get(cv2.CAP_PROP_POS_FRAMES))
         success, frame = video.read()
         if not success or frame is None:
-            self.__update_status(f'Failed to read frame from "{os.path.basename(video_path)}" at {int(frame_number)}. Skipping clip.')
+            self.__update_status('Failed to read frame from "{filename}" at {frame}. Skipping clip.',
+                                 filename=os.path.basename(video_path), frame=int(frame_number))
             video.release()
             return
 
@@ -454,9 +457,9 @@ class VideoToolUIController:
                                 blur_threshold, p['image_bordercrop'],
                                 crop_variation, output_directory)
         if batch_mode:
-            self.__update_status(f'Image extraction from all videos in {p["image_list"]} complete')
+            self.__update_status('Image extraction from all videos in {path} complete', path=p["image_list"])
         else:
-            self.__update_status(f'Image extraction from "{p["image_single"]}" complete')
+            self.__update_status('Image extraction from "{path}" complete', path=p["image_single"])
 
     def __save_frames(self, video_path: str, timestamp_min: str, timestamp_max: str, capture_rate: float,
                       blur_threshold: float, remove_borders: bool, crop_variation: float, output_dir: str):
@@ -479,7 +482,8 @@ class VideoToolUIController:
             frame = max(0, min(frame, max(total_frames - 1, 0)))
             frame_list.append(frame)
 
-        self.__update_status(f'Video "{os.path.basename(video_path)}" will be split into {len(frame_list)} images in "{output_dir}"')
+        self.__update_status('Video "{filename}" will be split into {count} images in "{path}"',
+                             filename=os.path.basename(video_path), count=len(frame_list), path=output_dir)
 
         output_list = []
         for f in frame_list:
@@ -491,14 +495,16 @@ class VideoToolUIController:
                 output_list.append((f, frame_sharpness))
 
         if not output_list:
-            self.__update_status(f'No frames extracted from "{os.path.basename(video_path)}" in the selected range.')
+            self.__update_status('No frames extracted from "{filename}" in the selected range.',
+                                 filename=os.path.basename(video_path))
             video.release()
             return
 
         output_list_sorted = sorted(output_list, key=lambda x: x[1])
         cutoff = int(blur_threshold * len(output_list_sorted))
         output_list_cut = output_list_sorted[cutoff:]
-        self.__update_status(f'{cutoff} blurriest images have been dropped from "{os.path.basename(video_path)}"')
+        self.__update_status('{count} blurriest images have been dropped from "{filename}"',
+                             count=cutoff, filename=os.path.basename(video_path))
 
         basename, ext = os.path.splitext(os.path.basename(video_path))
         os.makedirs(output_dir, exist_ok=True)
@@ -562,7 +568,7 @@ class VideoToolUIController:
                                 url.strip(), p['download_output'],
                                 p['download_args'])
 
-        self.__update_status(f'Completed {len(ydl_urls)} downloads.')
+        self.__update_status('Completed {count} downloads.', count=len(ydl_urls))
 
     def __download_video(self, url: str, output_dir: str, output_args: str):
         url = (url or "").strip()
@@ -574,6 +580,6 @@ class VideoToolUIController:
         additional_args = shlex.split(output_args.strip()) if output_args and output_args.strip() else []
         cmd = ["yt-dlp", "-o", "%(title)s.%(ext)s", "-P", output_dir] + additional_args + [url]
 
-        self.__update_status(f'Downloading {url}')
+        self.__update_status('Downloading {url}', url=url)
         subprocess.run(cmd)
-        self.__update_status(f'Download {url} done!')
+        self.__update_status('Download {url} done!', url=url)

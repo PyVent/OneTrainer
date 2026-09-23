@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 )
 
 from modules.ui.PySide6GenerateMasksWindowView import _BatchGenerationThread
+from modules.util.ui.pyside6_i18n import set_localized_text, translate as tr
 
 
 class PySide6GenerateCaptionsWindowView(QDialog):
@@ -50,8 +51,11 @@ class PySide6GenerateCaptionsWindowView(QDialog):
         form.addRow("Caption postfix", self.caption_postfix)
 
         self.mode = QComboBox(self)
-        self.mode.addItems(["Replace all captions", "Create if absent", "Add as new line"])
-        self.mode.setCurrentText("Create if absent")
+        mode_names = ["Replace all captions", "Create if absent", "Add as new line"]
+        for name in mode_names:
+            self.mode.addItem(tr(name), name)
+        self.mode.setProperty("_i18n_combo_sources", mode_names)
+        self.mode.setCurrentIndex(self.mode.findData("Create if absent"))
         form.addRow("Mode", self.mode)
 
         self.include_subdirectories = QCheckBox("Include subfolders", self)
@@ -69,7 +73,7 @@ class PySide6GenerateCaptionsWindowView(QDialog):
         layout.addWidget(self.create_button)
 
     def browse_for_path(self):
-        path = QFileDialog.getExistingDirectory(self, "Choose image folder", self.path.text())
+        path = QFileDialog.getExistingDirectory(self, tr("Choose image folder"), self.path.text())
         if path:
             self.path.setText(path)
 
@@ -80,13 +84,14 @@ class PySide6GenerateCaptionsWindowView(QDialog):
     def _apply_progress(self, value, max_value):
         self.progress.setRange(0, max(1, max_value))
         self.progress.setValue(value)
-        self.progress_label.setText(f"Progress: {value}/{max_value}")
+        set_localized_text(self.progress_label, "Progress: {value}/{max_value}",
+                           value=value, max_value=max_value)
 
     def create_captions(self):
         if self._running:
             return
         if not os.path.isdir(self.path.text()):
-            QMessageBox.warning(self, "Invalid folder", "Choose an existing image folder.")
+            QMessageBox.warning(self, tr("Invalid folder"), tr("Choose an existing image folder."))
             return
         options = dict(
             model_name=self.model.currentText(),
@@ -94,7 +99,7 @@ class PySide6GenerateCaptionsWindowView(QDialog):
             initial_caption=self.initial_caption.text(),
             caption_prefix=self.caption_prefix.text(),
             caption_postfix=self.caption_postfix.text(),
-            mode_str=self.mode.currentText(),
+            mode_str=self.mode.currentData(),
             include_subdirectories=self.include_subdirectories.isChecked(),
         )
         self._running = True
@@ -106,7 +111,7 @@ class PySide6GenerateCaptionsWindowView(QDialog):
 
     @Slot(str)
     def _on_failed(self, message):
-        QMessageBox.critical(self, "Caption generation failed", message)
+        QMessageBox.critical(self, tr("Caption generation failed"), tr(message))
 
     @Slot()
     def _on_finished(self):
