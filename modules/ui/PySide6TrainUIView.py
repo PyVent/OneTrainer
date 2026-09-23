@@ -29,12 +29,13 @@ from modules.util.config.TrainConfig import TrainConfig
 from modules.util.enum.ModelType import ModelType
 from modules.util.enum.TrainingMethod import TrainingMethod
 from modules.util.ui import pyside6_components
+from modules.util.ui.pyside6_navigation import WorkflowNavigation
 from modules.util.ui.pyside6_util import QtABCMeta
 from modules.util.ui.PySide6UIState import PySide6UIState
 
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QFileDialog, QGridLayout, QMainWindow, QMessageBox, QTabWidget, QWidget
+from PySide6.QtWidgets import QFileDialog, QGridLayout, QHBoxLayout, QMainWindow, QMessageBox, QTabWidget, QWidget
 
 
 class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
@@ -57,6 +58,7 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         self.training_button = None
         self.export_button = None
         self.tabview: QTabWidget | None = None
+        self.navigation: WorkflowNavigation | None = None
         self._tab_widgets: dict[str, QWidget] = {}
 
         self.model_tab = None
@@ -78,13 +80,27 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         self.top_bar_component = self._build_top_bar(central)
         central_lo.addWidget(self.top_bar_component, 0, 0)
 
-        self.tabview = QTabWidget(central)
-        central_lo.addWidget(self.tabview, 1, 0)
+        page_area = QWidget(central)
+        page_layout = QHBoxLayout(page_area)
+        page_layout.setContentsMargins(0, 0, 0, 0)
+        page_layout.setSpacing(0)
+
+        self.navigation = WorkflowNavigation(page_area)
+        page_layout.addWidget(self.navigation)
+
+        self.tabview = QTabWidget(page_area)
+        self.tabview.tabBar().hide()
+        page_layout.addWidget(self.tabview, 1)
+        central_lo.addWidget(page_area, 1, 0)
+
+        self.navigation.page_selected.connect(self._show_navigation_page)
+        self.tabview.currentChanged.connect(self._sync_navigation_selection)
 
         bottom = self._build_bottom_bar(central)
         central_lo.addWidget(bottom, 2, 0)
 
         self._create_tabs()
+        self._refresh_navigation()
         self.change_training_method(self.controller.train_config.training_method)
         self._update_additional_embeddings_tab(self.controller.train_config.model_type)
 
@@ -295,6 +311,31 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         self.tabview.addTab(self.cloud_tab, "cloud")
         self._tab_widgets["cloud"] = self.cloud_tab
 
+    def _refresh_navigation(self):
+        if self.navigation is None or self.tabview is None:
+            return
+        available = {
+            key for key, page in self._tab_widgets.items()
+            if (index := self.tabview.indexOf(page)) >= 0 and self.tabview.isTabVisible(index)
+        }
+        self.navigation.set_pages(available)
+        self._sync_navigation_selection()
+
+    def _sync_navigation_selection(self, _index: int | None = None):
+        if self.navigation is None or self.tabview is None:
+            return
+        current = self.tabview.currentWidget()
+        key = next((key for key, page in self._tab_widgets.items() if page is current), None)
+        self.navigation.select_page(key)
+
+    def _show_navigation_page(self, key: str):
+        page = self._tab_widgets.get(key)
+        if page is None or self.tabview is None:
+            return
+        index = self.tabview.indexOf(page)
+        if index >= 0 and self.tabview.isTabVisible(index):
+            self.tabview.setCurrentIndex(index)
+
     def create_sampling_tab(self):
         tab_page = QWidget()
         tab_lo = QGridLayout(tab_page)
@@ -342,6 +383,7 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         page = self._tab_widgets.get("additional embeddings")
         if page is not None:
             self.tabview.setTabVisible(self.tabview.indexOf(page), supported)
+        self._refresh_navigation()
 
     def change_training_method(self, training_method: TrainingMethod):
         if not self.tabview:
@@ -366,6 +408,7 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
             tab_page = self._create_scrollable_tab(self._configure_embedding_frame)
             self.tabview.addTab(tab_page, 'embedding')
             self._tab_widgets['embedding'] = tab_page
+        self._refresh_navigation()
 
     def load_preset(self):
         if self.additional_embeddings_tab:

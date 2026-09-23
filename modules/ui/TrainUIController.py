@@ -236,14 +236,16 @@ class TrainUIController:
 
     def __training_thread_function_impl(self):
         error_caught = False
-
-        self.training_callbacks = TrainCallbacks(
-            on_update_train_progress=self.on_update_train_progress,
-            on_update_status=self.on_update_status,
-        )
-
-        trainer = create.create_trainer(self.train_config, self.training_callbacks, self.training_commands, reattach=self.view.get_cloud_reattach())
+        trainer = None
         try:
+            self.training_callbacks = TrainCallbacks(
+                on_update_train_progress=self.on_update_train_progress,
+                on_update_status=self.on_update_status,
+            )
+            trainer = create.create_trainer(
+                self.train_config, self.training_callbacks, self.training_commands,
+                reattach=self.view.get_cloud_reattach(),
+            )
             trainer.start()
             if self.train_config.cloud.enabled:
                 self.view.sync_cloud_secrets()
@@ -253,31 +255,47 @@ class TrainUIController:
             self.start_time = time.monotonic()
             trainer.train()
         except Exception:
-            if self.train_config.cloud.enabled:
-                self.view.sync_cloud_secrets()
             error_caught = True
             traceback.print_exc()
+            if self.train_config.cloud.enabled:
+                try:
+                    self.view.sync_cloud_secrets()
+                except Exception:
+                    traceback.print_exc()
+        finally:
+            if trainer is not None:
+                try:
+                    trainer.end()
+                except Exception:
+                    error_caught = True
+                    traceback.print_exc()
 
-        trainer.end()
+            self.training_thread = None
+            self.training_callbacks = None
+            self.training_commands = None
+            self.start_time = None
+            self.start_total_steps = None
 
-        # clear gpu memory
-        del trainer
+            try:
+                torch.clear_autocast_cache()
+            except Exception:
+                error_caught = True
+                traceback.print_exc()
+            try:
+                torch_gc()
+            except Exception:
+                error_caught = True
+                traceback.print_exc()
 
-        self.training_thread = None
-        self.training_commands = None
-        torch.clear_autocast_cache()
-        torch_gc()
+            if error_caught:
+                self.on_update_status("Error: check the console for details")
+            else:
+                self.on_update_status("Stopped")
 
-        if error_caught:
-            self.on_update_status("Error: check the console for details")
-        else:
-            self.on_update_status("Stopped")
+            self.view.schedule_on_main_thread(lambda: self.view.on_training_stopped(error_caught))
 
-        # queue UI update on Tk main thread; on_training_stopped applies shared styles, avoid potential race/crash
-        self.view.schedule_on_main_thread(lambda: self.view.on_training_stopped(error_caught))
-
-        if self.train_config.tensorboard_always_on and not self.always_on_tensorboard_subprocess:
-            self.view.schedule_on_main_thread(self._start_always_on_tensorboard)
+            if self.train_config.tensorboard_always_on and not self.always_on_tensorboard_subprocess:
+                self.view.schedule_on_main_thread(self._start_always_on_tensorboard)
 
     def start_training(self):
         if self.training_thread is None:

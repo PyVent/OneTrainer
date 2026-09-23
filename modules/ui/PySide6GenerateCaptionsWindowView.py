@@ -1,118 +1,101 @@
-import contextlib
-import tkinter as tk
-from tkinter import filedialog
+import os
 
-from modules.ui.BaseGenerateCaptionsWindowView import BaseGenerateCaptionsWindowView
-from modules.ui.GenerateCaptionsWindowController import GenerateCaptionsWindowController
-from modules.util.ui.ui_utils import set_window_icon
+from PySide6.QtCore import QEventLoop
+from PySide6.QtWidgets import (
+    QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
+    QHBoxLayout, QLabel, QLineEdit, QMessageBox, QProgressBar, QPushButton,
+    QVBoxLayout, QWidget,
+)
 
-import customtkinter as ctk
 
-
-class CtkGenerateCaptionsWindowView(BaseGenerateCaptionsWindowView, ctk.CTkToplevel):
-    def __init__(self, parent, controller: GenerateCaptionsWindowController, path, parent_include_subdirectories, *args, **kwargs):
-        ctk.CTkToplevel.__init__(self, parent, *args, **kwargs)
-
-        if path is None:
-            path = ""
-
+class PySide6GenerateCaptionsWindowView(QDialog):
+    def __init__(self, parent, controller, path, parent_include_subdirectories):
+        super().__init__(parent)
         self.controller = controller
+        self._running = False
+        self.setWindowTitle("Batch generate captions")
+        self.resize(460, 350)
 
-        self.mode_var = ctk.StringVar(self, "Create if absent")
-        self.modes = ["Replace all captions", "Create if absent", "Add as new line"]
-        self.model_var = ctk.StringVar(self, "Blip")
-        self.models = ["Blip", "Blip2", "WD14 VIT v2"]
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        layout.addLayout(form)
 
-        self.title("Batch generate captions")
-        self.geometry("360x360")
-        self.resizable(True, True)
+        self.model = QComboBox(self)
+        self.model.addItems(["Blip", "Blip2", "WD14 VIT v2"])
+        form.addRow("Model", self.model)
 
-        self.frame = ctk.CTkFrame(self, width=600, height=300)
-        self.frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        folder_row = QWidget(self)
+        folder_layout = QHBoxLayout(folder_row)
+        folder_layout.setContentsMargins(0, 0, 0, 0)
+        self.path = QLineEdit(path or "", folder_row)
+        browse = QPushButton("…", folder_row)
+        browse.setFixedWidth(32)
+        browse.clicked.connect(self.browse_for_path)
+        folder_layout.addWidget(self.path)
+        folder_layout.addWidget(browse)
+        form.addRow("Folder", folder_row)
 
-        self.model_label = ctk.CTkLabel(self.frame, text="Model", width=100)
-        self.model_label.grid(row=0, column=0, sticky="w", padx=5, pady=5)
-        self.model_dropdown = ctk.CTkOptionMenu(self.frame, variable=self.model_var, values=self.models, dynamic_resizing=False, width=200)
-        self.model_dropdown.grid(row=0, column=1, sticky="w", padx=5, pady=5)
+        self.initial_caption = QLineEdit(self)
+        self.caption_prefix = QLineEdit(self)
+        self.caption_postfix = QLineEdit(self)
+        form.addRow("Initial caption", self.initial_caption)
+        form.addRow("Caption prefix", self.caption_prefix)
+        form.addRow("Caption postfix", self.caption_postfix)
 
-        self.path_label = ctk.CTkLabel(self.frame, text="Folder", width=100)
-        self.path_label.grid(row=1, column=0, sticky="w",padx=5, pady=5)
-        self.path_entry = ctk.CTkEntry(self.frame, width=150)
-        self.path_entry.insert(0, path)
-        self.path_entry.grid(row=1, column=1, sticky="w", padx=5, pady=5)
-        self.path_button = ctk.CTkButton(self.frame, width=30, text="...", command=lambda: self.browse_for_path(self.path_entry))
-        self.path_button.grid(row=1, column=1, sticky="e", padx=5, pady=5)
+        self.mode = QComboBox(self)
+        self.mode.addItems(["Replace all captions", "Create if absent", "Add as new line"])
+        self.mode.setCurrentText("Create if absent")
+        form.addRow("Mode", self.mode)
 
-        self.caption_label = ctk.CTkLabel(self.frame, text="Initial Caption", width=100)
-        self.caption_label.grid(row=2, column=0, sticky="w", padx=5, pady=5)
-        self.caption_entry = ctk.CTkEntry(self.frame, width=200)
-        self.caption_entry.grid(row=2, column=1, sticky="w", padx=5, pady=5)
+        self.include_subdirectories = QCheckBox("Include subfolders", self)
+        self.include_subdirectories.setChecked(parent_include_subdirectories)
+        form.addRow("", self.include_subdirectories)
 
-        self.prefix_label = ctk.CTkLabel(self.frame, text="Caption Prefix", width=100)
-        self.prefix_label.grid(row=3, column=0, sticky="w", padx=5, pady=5)
-        self.prefix_entry = ctk.CTkEntry(self.frame, width=200)
-        self.prefix_entry.grid(row=3, column=1, sticky="w", padx=5, pady=5)
+        self.progress_label = QLabel("Progress: 0/0", self)
+        self.progress = QProgressBar(self)
+        self.progress.setRange(0, 1)
+        self.progress.setValue(0)
+        layout.addWidget(self.progress_label)
+        layout.addWidget(self.progress)
+        self.create_button = QPushButton("Create captions", self)
+        self.create_button.clicked.connect(self.create_captions)
+        layout.addWidget(self.create_button)
 
-        self.postfix_label = ctk.CTkLabel(self.frame, text="Caption Postfix", width=100)
-        self.postfix_label.grid(row=4, column=0, sticky="w", padx=5, pady=5)
-        self.postfix_entry = ctk.CTkEntry(self.frame, width=200)
-        self.postfix_entry.grid(row=4, column=1, sticky="w", padx=5, pady=5)
-
-        self.mode_label = ctk.CTkLabel(self.frame, text="Mode", width=100)
-        self.mode_label.grid(row=5, column=0, sticky="w", padx=5, pady=5)
-        self.mode_dropdown = ctk.CTkOptionMenu(self.frame, variable=self.mode_var, values=self.modes, dynamic_resizing=False, width=200)
-        self.mode_dropdown.grid(row=5, column=1, sticky="w", padx=5, pady=5)
-
-        self.include_subdirectories_label = ctk.CTkLabel(self.frame, text="Include subfolders", width=100)
-        self.include_subdirectories_label.grid(row=6, column=0, sticky="w", padx=5, pady=5)
-        self.include_subdirectories_var = ctk.BooleanVar(self, parent_include_subdirectories)
-        self.include_subdirectories_switch = ctk.CTkSwitch(self.frame, text="", variable=self.include_subdirectories_var)
-        self.include_subdirectories_switch.grid(row=6, column=1, sticky="w", padx=5, pady=5)
-
-        self.progress_label = ctk.CTkLabel(self.frame, text="Progress: 0/0", width=100)
-        self.progress_label.grid(row=7, column=0, sticky="w", padx=5, pady=5)
-        self.progress = ctk.CTkProgressBar(self.frame, orientation="horizontal", mode="determinate", width=200)
-        self.progress.grid(row=7, column=1, sticky="w", padx=5, pady=5)
-
-        self.create_captions_button = ctk.CTkButton(self.frame, text="Create Captions", width=310, command=self._on_create_captions)
-        self.create_captions_button.grid(row=8, column=0, columnspan=2, sticky="w", padx=5, pady=5)
-
-        self.frame.pack(fill="both", expand=True)
-
-        self.wait_visibility()
-        self.grab_set()
-        self.focus_set()
-        self.after(200, lambda: set_window_icon(self))
-
-    def browse_for_path(self, entry_box):
-        # get the path from the user
-        path = filedialog.askdirectory()
-        # set the path to the entry box
-        # delete entry box text
-        entry_box.focus_set()
-        entry_box.delete(0, filedialog.END)
-        entry_box.insert(0, path)
-        self.focus_set()
+    def browse_for_path(self):
+        path = QFileDialog.getExistingDirectory(self, "Choose image folder", self.path.text())
+        if path:
+            self.path.setText(path)
 
     def set_progress(self, value, max_value):
-        progress = value / max_value
-        self.progress.set(progress)
-        self.progress_label.configure(text=f"{value}/{max_value}")
-        self.progress.update()
+        self.progress.setRange(0, max(1, max_value))
+        self.progress.setValue(value)
+        self.progress_label.setText(f"Progress: {value}/{max_value}")
+        QApplication.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
 
-    def _on_create_captions(self):
-        self.controller.create_captions(
-            model_name=self.model_var.get(),
-            path=self.path_entry.get(),
-            initial_caption=self.caption_entry.get(),
-            caption_prefix=self.prefix_entry.get(),
-            caption_postfix=self.postfix_entry.get(),
-            mode_str=self.mode_var.get(),
-            include_subdirectories=self.include_subdirectories_var.get(),
-        )
+    def create_captions(self):
+        if not os.path.isdir(self.path.text()):
+            QMessageBox.warning(self, "Invalid folder", "Choose an existing image folder.")
+            return
+        self._running = True
+        self.create_button.setEnabled(False)
+        try:
+            self.controller.create_captions(
+                model_name=self.model.currentText(),
+                path=self.path.text(),
+                initial_caption=self.initial_caption.text(),
+                caption_prefix=self.caption_prefix.text(),
+                caption_postfix=self.caption_postfix.text(),
+                mode_str=self.mode.currentText(),
+                include_subdirectories=self.include_subdirectories.isChecked(),
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "Caption generation failed", str(exc))
+        finally:
+            self._running = False
+            self.create_button.setEnabled(True)
 
-    def destroy(self):
-        with contextlib.suppress(tk.TclError):
-            self.grab_release()
-
-        super().destroy()
+    def closeEvent(self, event):
+        if self._running:
+            event.ignore()
+        else:
+            super().closeEvent(event)
