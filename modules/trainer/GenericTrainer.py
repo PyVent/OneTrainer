@@ -501,14 +501,13 @@ class GenericTrainer(BaseTrainer):
                 output_model_destination=save_path,
                 dtype=self.config.output_dtype.torch_dtype()
             )
-            if self.config.optimizer.optimizer.is_schedule_free:
-                torch.clear_autocast_cache()
-                self.model.optimizer.train()
         except Exception:
             traceback.print_exc()
             print("Could not save model. Check your disk space!")
             try:
                 if os.path.isfile(save_path):
+                    os.remove(save_path)
+                elif os.path.isdir(save_path):
                     shutil.rmtree(save_path)
             except Exception:
                 traceback.print_exc()
@@ -516,6 +515,9 @@ class GenericTrainer(BaseTrainer):
         finally:
             if self.model.ema:
                 self.model.ema.copy_temp_to(self.parameters)
+            if self.config.optimizer.optimizer.is_schedule_free:
+                torch.clear_autocast_cache()
+                self.model.optimizer.train()
 
         torch_gc()
 
