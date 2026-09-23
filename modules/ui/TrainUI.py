@@ -12,7 +12,7 @@ import webbrowser
 from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 
 import scripts.generate_debug_report
 from modules.ui.AdditionalEmbeddingsTab import AdditionalEmbeddingsTab
@@ -695,6 +695,7 @@ class TrainUI(ctk.CTk):
             window = SampleWindow(
                 self,
                 train_config=self.train_config,
+                use_external_model=False,
             )
             self.wait_window(window)
             torch_gc()
@@ -731,6 +732,8 @@ class TrainUI(ctk.CTk):
         if training_callbacks and training_commands:
             window = SampleWindow(
                 self,
+                train_config=self.train_config,
+                use_external_model=True,
                 callbacks=training_callbacks,
                 commands=training_commands,
             )
@@ -784,6 +787,9 @@ class TrainUI(ctk.CTk):
     def start_training(self):
         if self.training_thread is None:
             self.save_default()
+            if self.train_config.clear_cache_before_training and self.train_config.latent_caching \
+                    and not messagebox.askokcancel("Clear Cache Before Training", "Clear cache?"):
+                return
             self._set_training_button_running()
 
             if self.train_config.tensorboard and not self.train_config.tensorboard_always_on and self.always_on_tensorboard_subprocess:

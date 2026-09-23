@@ -33,7 +33,8 @@ class SampleWindow(ctk.CTkToplevel):
     def __init__(
             self,
             parent,
-            train_config: TrainConfig | None = None,
+            train_config: TrainConfig,
+            use_external_model: bool,
             callbacks: TrainCallbacks | None = None,
             commands: TrainCommands | None = None,
             *args, **kwargs
@@ -44,7 +45,7 @@ class SampleWindow(ctk.CTkToplevel):
         self.geometry("1200x800")
         self.resizable(True, True)
 
-        if train_config is not None:
+        if not use_external_model:
             self.initial_train_config = TrainConfig.default_values().from_dict(train_config.to_dict())
             # remove some settings to speed up model loading for sampling
             self.initial_train_config.optimizer.optimizer = None
@@ -58,7 +59,6 @@ class SampleWindow(ctk.CTkToplevel):
         self.sample = SampleConfig.default_values()
         self.ui_state = UIState(self, self.sample)
 
-        use_external_model = self.initial_train_config is None
         if use_external_model:
             self.callbacks.set_on_sample_custom(self.__update_preview)
             self.callbacks.set_on_update_sample_custom_progress(self.__update_progress)

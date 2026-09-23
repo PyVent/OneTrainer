@@ -88,6 +88,11 @@ def main():
         trainer.start()
         trainer.train()
 
+    except Exception:
+        # Show the training error before final model saving delays the traceback.
+        traceback.print_exc()
+        raise
+
     finally:
         if args.command_path:
             stop_event.set()

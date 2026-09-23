@@ -726,8 +726,9 @@ class LoRAModuleWrapper:
             state_dict: the state dict
             strict: whether to strictly enforce that the keys in state_dict match the module's parameters
         """
-        # create a copy, so the modules can pop states
-        state_dict = {k: v for (k, v) in state_dict.items() if k.startswith(self.prefix)}
+        # Keep text_encoder_2 out of the text_encoder wrapper.
+        prefix = self.prefix + "." if self.prefix else ""
+        state_dict = {k: v for (k, v) in state_dict.items() if k.startswith(prefix)}
 
         self._check_rank_matches(state_dict)
 

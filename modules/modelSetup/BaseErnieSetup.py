@@ -90,10 +90,10 @@ class BaseErnieSetup(
             )
 
             # Patchify: [B, 32, H, W] -> [B, 128, H/2, W/2]
-            latent_image = model.patchify_latents(batch['latent_image'].float())
-            latent_height = latent_image.shape[-2]
-            latent_width = latent_image.shape[-1]
-            scaled_latent_image = model.scale_latents(latent_image)
+            patchified_latent_image = model.patchify_latents(batch['latent_image'].float())
+            latent_height = batch['latent_image'].shape[-2]
+            latent_width = batch['latent_image'].shape[-1]
+            scaled_latent_image = model.scale_latents(patchified_latent_image)
 
             latent_noise = self._create_noise(scaled_latent_image, config, generator)
 
