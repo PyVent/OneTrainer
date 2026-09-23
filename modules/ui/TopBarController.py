@@ -15,6 +15,7 @@ from modules.util.path_util import write_json_atomic
 class TopBarController:
     def __init__(self, config: TrainConfig):
         self.train_config = config
+        self.last_load_error: str | None = None
 
     def get_model_types(self) -> list[tuple[str, ModelType]]:
         return [  #TODO simplify
@@ -81,6 +82,7 @@ class TopBarController:
         write_json_atomic(path, self.train_config.to_settings_dict(secrets=False))
 
     def load_config_from_file(self, filename: str) -> TrainConfig | None:
+        self.last_load_error = None
         try:
             basename = os.path.basename(filename)
             is_built_in_preset = basename.startswith("#") and basename != "#.json"
@@ -98,8 +100,10 @@ class TopBarController:
             self.train_config.from_dict(loaded_config.to_dict())
             return loaded_config
         except FileNotFoundError:
+            self.last_load_error = f"File not found: {filename}"
             return None
-        except Exception:
+        except Exception as exc:
+            self.last_load_error = str(exc) or type(exc).__name__
             print(traceback.format_exc())
             return None
 

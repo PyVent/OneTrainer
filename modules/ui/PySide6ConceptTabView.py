@@ -7,8 +7,20 @@ from modules.util.ui.PySide6UIState import PySide6UIState
 from modules.util.ui.QtVar import QtVar
 
 from PIL.ImageQt import ImageQt
+from PySide6.QtCore import QEvent, QObject, QTimer
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QLineEdit, QPushButton, QWidget
+from PySide6.QtWidgets import QCheckBox, QGridLayout, QLabel, QLineEdit, QPushButton, QWidget
+
+
+class _ViewportResizeFilter(QObject):
+    def __init__(self, viewport, callback):
+        super().__init__(viewport)
+        self.callback = callback
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Type.Resize:
+            self.callback()
+        return super().eventFilter(watched, event)
 
 
 class PySide6ConceptTabView(PySide6ConfigListView, BaseConceptTabView):
@@ -19,6 +31,7 @@ class PySide6ConceptTabView(PySide6ConfigListView, BaseConceptTabView):
         self.search_var = QtVar("")
         self.filter_var = QtVar("ALL")
         self.show_disabled_var = QtVar(True)
+        self._grid_columns = 1
 
         PySide6ConfigListView.__init__(
             self, master, controller, ui_state,
@@ -39,18 +52,44 @@ class PySide6ConceptTabView(PySide6ConfigListView, BaseConceptTabView):
     def create_widget(self, master, element, i, open_command, remove_command, clone_command, save_command):
         return PySide6ConceptWidgetView(master, element, i, open_command, remove_command, clone_command, save_command, self.controller)
 
+    def _create_element_list_frame(self, master):
+        content = super()._create_element_list_frame(master)
+        content._grid_columns = self._grid_columns
+        viewport = content._scroll_area.viewport()
+        resize_filter = _ViewportResizeFilter(viewport, lambda: self._reflow_cards(content))
+        viewport.installEventFilter(resize_filter)
+        content._resize_filter = resize_filter
+        QTimer.singleShot(0, lambda: self._reflow_cards(content))
+        return content
+
+    def _reflow_cards(self, content):
+        if content is not self.element_list:
+            return
+        try:
+            viewport_width = content._scroll_area.viewport().width()
+        except RuntimeError:
+            return  # A queued initial resize can outlive a replaced config list.
+        columns = max(1, min(6, (viewport_width + 10) // 170))
+        if columns == self._grid_columns:
+            return
+        self._grid_columns = columns
+        content._grid_columns = columns
+        if self.widgets_initialized:
+            self._update_widget_visibility()
+
     def _add_search_bar(self):
         toolbar = QWidget(self.top_frame)
-        row_lo = QHBoxLayout(toolbar)
+        row_lo = QGridLayout(toolbar)
         row_lo.setContentsMargins(0, 0, 0, 0)
-        pyside6_components._layout(self.top_frame).addWidget(toolbar, 0, 4)
+        row_lo.setColumnStretch(1, 1)
+        row_lo.setColumnStretch(3, 1)
+        pyside6_components._layout(self.top_frame).addWidget(toolbar, 1, 0, 1, 4)
 
-        self.search_var = QtVar("")
         search_entry = QLineEdit(toolbar)
         search_entry.setPlaceholderText("Filter...")
-        search_entry.setFixedWidth(200)
-        row_lo.addWidget(QLabel("Search:", toolbar))
-        row_lo.addWidget(search_entry)
+        search_entry.setMinimumWidth(100)
+        row_lo.addWidget(QLabel("Search:", toolbar), 0, 0)
+        row_lo.addWidget(search_entry, 0, 1)
 
         def _on_search(text):
             self.search_var.set(text)
@@ -58,12 +97,11 @@ class PySide6ConceptTabView(PySide6ConfigListView, BaseConceptTabView):
         search_entry.textChanged.connect(_on_search)
         self.search_var._bind_widget(lambda v: search_entry.setText(v))
 
-        self.filter_var = QtVar("ALL")
         filter_combo = pyside6_components.NoScrollComboBox(toolbar)
         filter_combo.addItems(self._FILTER_TYPES)
-        filter_combo.setFixedWidth(150)
-        row_lo.addWidget(QLabel("Type:", toolbar))
-        row_lo.addWidget(filter_combo)
+        filter_combo.setMinimumWidth(120)
+        row_lo.addWidget(QLabel("Type:", toolbar), 0, 2)
+        row_lo.addWidget(filter_combo, 0, 3)
 
         def _on_filter(text):
             self.filter_var.set(text)
@@ -71,10 +109,9 @@ class PySide6ConceptTabView(PySide6ConfigListView, BaseConceptTabView):
         filter_combo.currentTextChanged.connect(_on_filter)
         self.filter_var._bind_widget(lambda v: filter_combo.setCurrentText(v))
 
-        self.show_disabled_var = QtVar(True)
         show_disabled_cb = QCheckBox("Show Disabled", toolbar)
         show_disabled_cb.setChecked(True)
-        row_lo.addWidget(show_disabled_cb)
+        row_lo.addWidget(show_disabled_cb, 1, 0, 1, 3)
 
         def _on_show_disabled(state):
             self.show_disabled_var.set(bool(state))
@@ -83,9 +120,12 @@ class PySide6ConceptTabView(PySide6ConfigListView, BaseConceptTabView):
         self.show_disabled_var._bind_widget(lambda v: show_disabled_cb.setChecked(bool(v)))
 
         clear_btn = QPushButton("Clear", toolbar)
-        clear_btn.setFixedWidth(50)
         clear_btn.clicked.connect(self._reset_filters)
-        row_lo.addWidget(clear_btn)
+        row_lo.addWidget(clear_btn, 1, 3)
+
+        self._search_entry = search_entry
+        self._filter_combo = filter_combo
+        self._show_disabled_cb = show_disabled_cb
 
     def _update_filters(self):
         self._create_element_list(search=self.search_var.get(),
@@ -166,8 +206,9 @@ class PySide6ConceptWidgetView(BaseConceptWidgetView, QWidget):
 
     def place_in_list(self):
         index = getattr(self, 'visible_index', self.i)
-        x = index % 6
-        y = index // 6
+        columns = getattr(self.parent(), '_grid_columns', 1)
+        x = index % columns
+        y = index // columns
         lo = pyside6_components._layout(self.parent())
         lo.addWidget(self, y, x)
         lo.setColumnStretch(6, 1)

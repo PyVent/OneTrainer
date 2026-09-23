@@ -7,7 +7,7 @@ from modules.util.enum.TrainingMethod import TrainingMethod
 from modules.util.ui import pyside6_components
 
 from PySide6.QtCore import QTimer, Qt
-from PySide6.QtWidgets import QFileDialog, QLabel, QLayout, QSizePolicy, QWidget
+from PySide6.QtWidgets import QFileDialog, QLabel, QLayout, QMessageBox, QSizePolicy, QWidget
 
 
 class PySide6TopBarView(BaseTopBarView, QWidget):
@@ -140,9 +140,15 @@ class PySide6TopBarView(BaseTopBarView, QWidget):
             # the native dialog doesn't reliably append the filter's extension on every platform
             if not path.endswith(".json"):
                 path += ".json"
-            callback(path)
+            try:
+                callback(path)
+            except OSError as exc:
+                QMessageBox.critical(self, "Cannot save configuration", str(exc))
 
     def _show_open_dialog(self, initial_dir: str, callback):
         path, _ = QFileDialog.getOpenFileName(self, "Load config", initial_dir, "JSON (*.json)")
         if path:
             callback(path)
+
+    def _show_load_error(self, message: str):
+        QMessageBox.warning(self, "Cannot load configuration", message)

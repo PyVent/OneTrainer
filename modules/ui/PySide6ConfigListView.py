@@ -50,7 +50,9 @@ class PySide6ConfigListView(BaseConfigListView, ABC):
     def _create_top_frame(self, master):
         frame = QWidget(master)
         pyside6_components._layout(master).addWidget(frame, 0, 0)
-        pyside6_components._layout(frame).setColumnStretch(4, 1)
+        # Let the configuration selector take spare width; the action buttons
+        # keep their natural sizes. The Concepts filter bar can occupy row 1.
+        pyside6_components._layout(frame).setColumnStretch(0, 1)
         return frame
 
     def _create_element_list_frame(self, master):
@@ -69,6 +71,9 @@ class PySide6ConfigListView(BaseConfigListView, ABC):
 
     def _destroy_widget(self, widget):
         with contextlib.suppress(RuntimeError, AttributeError):
+            layout = widget.parentWidget().layout() if widget.parentWidget() else None
+            if layout is not None:
+                layout.removeWidget(widget)
             widget.hide()
             widget.deleteLater()
 

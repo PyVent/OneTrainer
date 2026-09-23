@@ -9,10 +9,15 @@ from modules.ui.TrainingTabController import TrainingTabController
 from modules.util.ui import pyside6_components
 from modules.util.ui.pyside6_util import QtABCMeta
 
+from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QScrollArea, QSizePolicy, QWidget
 
 
 class PySide6TrainingTabView(BaseTrainingTabView, QWidget, metaclass=QtABCMeta):
+    # The section widgets are created once by BaseTrainingTabView. Only their
+    # containing columns move when the viewport changes size.
+    THREE_COLUMN_WIDTH = 1200
+    TWO_COLUMN_WIDTH = 800
 
     def __init__(self, master, controller: TrainingTabController, ui_state):
         QWidget.__init__(self, master)
@@ -22,10 +27,14 @@ class PySide6TrainingTabView(BaseTrainingTabView, QWidget, metaclass=QtABCMeta):
         self.controller = controller
         self.ui_state = ui_state
         self.scroll_frame = None
+        self._columns = ()
+        self._column_layout = None
+        self._column_count = 0
         self.refresh_ui()
 
     def refresh_ui(self):
         if self.scroll_frame is not None:
+            self.scroll_frame.viewport().removeEventFilter(self)
             self.scroll_frame.hide()
             self.scroll_frame.deleteLater()
 
@@ -39,26 +48,21 @@ class PySide6TrainingTabView(BaseTrainingTabView, QWidget, metaclass=QtABCMeta):
 
         lo = pyside6_components._layout(frame)
         lo.setContentsMargins(pyside6_components.PAD, pyside6_components.PAD, pyside6_components.PAD, pyside6_components.PAD)
-        lo.setColumnStretch(0, 1)
-        lo.setColumnStretch(1, 1)
-        lo.setColumnStretch(2, 1)
+        lo.setRowStretch(3, 1)
 
         column_0 = QWidget(frame)
         column_0.setMinimumWidth(0)
         column_0.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        pyside6_components._layout(frame).addWidget(column_0, 0, 0)
         pyside6_components._layout(column_0).setColumnStretch(0, 1)
 
         column_1 = QWidget(frame)
         column_1.setMinimumWidth(0)
         column_1.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        pyside6_components._layout(frame).addWidget(column_1, 0, 1)
         pyside6_components._layout(column_1).setColumnStretch(0, 1)
 
         column_2 = QWidget(frame)
         column_2.setMinimumWidth(0)
         column_2.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        pyside6_components._layout(frame).addWidget(column_2, 0, 2)
         pyside6_components._layout(column_2).setColumnStretch(0, 1)
 
         self.build(column_0, column_1, column_2, self.controller, self.ui_state)
@@ -66,6 +70,35 @@ class PySide6TrainingTabView(BaseTrainingTabView, QWidget, metaclass=QtABCMeta):
         for col_widget in (column_0, column_1, column_2):
             lo = pyside6_components._layout(col_widget)
             lo.setRowStretch(lo.rowCount(), 1)
+
+        self._columns = (column_0, column_1, column_2)
+        self._column_layout = pyside6_components._layout(frame)
+        self._column_count = 0
+        scroll.viewport().installEventFilter(self)
+        self._reflow_columns(scroll.viewport().width())
+
+    def eventFilter(self, watched, event):
+        if self.scroll_frame is not None and watched is self.scroll_frame.viewport():
+            if event.type() == QEvent.Type.Resize:
+                self._reflow_columns(event.size().width())
+        return super().eventFilter(watched, event)
+
+    def _reflow_columns(self, width: int):
+        count = 3 if width >= self.THREE_COLUMN_WIDTH else 2 if width >= self.TWO_COLUMN_WIDTH else 1
+        if count == self._column_count:
+            return
+
+        layout = self._column_layout
+        for column in self._columns:
+            layout.removeWidget(column)
+
+        for index in range(3):
+            layout.setColumnStretch(index, 1 if index < count else 0)
+
+        for index, column in enumerate(self._columns):
+            layout.addWidget(column, index // count, index % count)
+
+        self._column_count = count
 
     def restore_optimizer_config(self, variable: str):
         self.controller.restore_optimizer_config(self.ui_state)

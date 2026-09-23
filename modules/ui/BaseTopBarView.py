@@ -27,6 +27,9 @@ class BaseTopBarView:
     def _show_open_dialog(self, initial_dir: str, callback):
         pass
 
+    def _show_load_error(self, message: str):
+        pass
+
     def build(
             self,
             frame,
@@ -88,7 +91,7 @@ class BaseTopBarView:
         )
 
         # restore the config from the previous session
-        self.__load_current_config(path_util.canonical_join(self.dir, "#.json"))
+        self.__load_current_config(path_util.canonical_join(self.dir, "#.json"), quiet=True)
 
     def __create_training_method(self):
         if self.training_method:
@@ -117,9 +120,11 @@ class BaseTopBarView:
     def __save_config(self):
         self._show_save_dialog("training_configs", self.controller.save_config_to_path)
 
-    def __load_current_config(self, filename):
+    def __load_current_config(self, filename, *, quiet: bool = False):
         loaded_config = self.controller.load_config_from_file(filename)
         if loaded_config is None:
+            if not quiet:
+                self._show_load_error(self.controller.last_load_error or f"Could not load {filename}")
             return
 
         self.ui_state.update(loaded_config)

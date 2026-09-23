@@ -135,6 +135,34 @@ class TrainUILifecycleTest(unittest.TestCase):
         trainer.end.assert_called_once_with()
         self.view.sync_cloud_secrets.assert_called_once_with()
 
+    def test_prepare_failure_does_not_enter_running_state(self):
+        self.controller.training_thread = None
+        self.view.save_default.side_effect = RuntimeError("disk full")
+        with patch("traceback.print_exc"):
+            self.controller.start_training()
+        self.view.on_training_started.assert_not_called()
+        self.view.show_validation_errors.assert_called_once_with(
+            ["Could not prepare training: disk full"]
+        )
+        self.assertIsNone(self.controller.training_thread)
+
+    def test_setup_failure_restores_start_button(self):
+        self.controller.training_thread = None
+        self.controller.train_config.clear_cache_before_training = False
+        self.controller.train_config.latent_caching = False
+        self.controller.train_config.tensorboard = False
+        self.torch_gc.side_effect = RuntimeError("GPU cleanup failed")
+        with patch("traceback.print_exc"):
+            self.controller.start_training()
+        self.view.on_training_started.assert_called_once_with()
+        self.view.on_training_stopped.assert_called_once_with(True)
+        self.view.on_update_status.assert_called_once_with("Error: training did not start")
+        self.view.show_validation_errors.assert_called_once_with(
+            ["Could not start training: GPU cleanup failed"]
+        )
+        self.assertIsNone(self.controller.training_thread)
+        self.assertIsNone(self.controller.training_commands)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -289,17 +289,81 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
 
     def _configure_data_frame(self, frame):
         lo = pyside6_components._layout(frame)
-        lo.setColumnStretch(1, 1)
-        lo.setColumnStretch(3, 1)
         self.build_data_tab_content(frame, self.controller, self.ui_state)
-        pyside6_components._pack_form(frame)
+
+        fields = {}
+        for row in range(3):
+            for col in (0, 1):
+                item = lo.itemAtPosition(row, col)
+                if item is None or item.widget() is None:
+                    raise RuntimeError(f"Missing Data field at row {row}, column {col}")
+                fields[row, col] = item.widget()
+        if lo.count() != len(fields):
+            raise RuntimeError("Unexpected widgets in Data form")
+        while lo.count():
+            lo.takeAt(0)
+
+        lo.setContentsMargins(12, 12, 12, 12)
+        lo.setVerticalSpacing(14)
+        lo.setColumnStretch(0, 1)
+        groups = (
+            ("Image preparation", (0,)),
+            ("Latent cache", (1, 2)),
+        )
+        for group_row, (title, rows) in enumerate(groups):
+            form = self._add_settings_group(frame, lo, group_row, title)
+            for row in rows:
+                form.addRow(fields[row, 0], fields[row, 1])
+        lo.setRowStretch(len(groups), 1)
 
     def _configure_backup_frame(self, frame):
         lo = pyside6_components._layout(frame)
-        lo.setColumnStretch(1, 1)
-        lo.setColumnStretch(3, 1)
         self.build_backup_tab_content(frame, self.controller, self.ui_state)
-        pyside6_components._pack_form(frame)
+
+        fields = {}
+        positions = tuple((row, col) for row in range(7) for col in (0, 1)) + ((0, 3), (4, 3))
+        for row, col in positions:
+            item = lo.itemAtPosition(row, col)
+            if item is None or item.widget() is None:
+                raise RuntimeError(f"Missing Backups field at row {row}, column {col}")
+            fields[row, col] = item.widget()
+        if lo.count() != len(fields):
+            raise RuntimeError("Unexpected widgets in Backups form")
+        while lo.count():
+            lo.takeAt(0)
+
+        lo.setContentsMargins(12, 12, 12, 12)
+        lo.setVerticalSpacing(14)
+        lo.setColumnStretch(0, 1)
+        backups = self._add_settings_group(frame, lo, 0, "Automatic backups")
+        for row in range(4):
+            backups.addRow(fields[row, 0], fields[row, 1])
+        backup_action = QHBoxLayout()
+        backup_action.addStretch(1)
+        backup_action.addWidget(fields[0, 3])
+        backups.addRow(backup_action)
+
+        saves = self._add_settings_group(frame, lo, 1, "Model saves")
+        for row in range(4, 7):
+            saves.addRow(fields[row, 0], fields[row, 1])
+        save_action = QHBoxLayout()
+        save_action.addStretch(1)
+        save_action.addWidget(fields[4, 3])
+        saves.addRow(save_action)
+        lo.setRowStretch(2, 1)
+
+    @staticmethod
+    def _add_settings_group(frame, layout, row, title):
+        group = QGroupBox(title, frame)
+        form = QFormLayout(group)
+        form.setContentsMargins(16, 18, 16, 16)
+        form.setHorizontalSpacing(22)
+        form.setVerticalSpacing(10)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        layout.addWidget(group, row, 0)
+        return form
 
     def _configure_tools_frame(self, frame):
         self.build_tools_tab_content(frame, self.controller, self.ui_state)
@@ -394,12 +458,22 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         tab_lo.addWidget(top_frame, 0, 0)
         top_lo = pyside6_components._layout(top_frame)
         top_lo.setContentsMargins(pyside6_components.PAD, pyside6_components.PAD, pyside6_components.PAD, pyside6_components.PAD)
-        top_lo.setColumnStretch(8, 1)
 
         sub_frame = QWidget(top_frame)
         pyside6_components._layout(top_frame).addWidget(sub_frame, 1, 0, 1, 8)
 
         self.build_sampling_tab_header(top_frame, sub_frame, self.controller, self.ui_state)
+        # Keep the shared fields and bindings, but split the formerly eight
+        # column header into two rows so it cannot widen every tab.
+        header_fields = [top_lo.itemAtPosition(0, column).widget() for column in range(8)]
+        for field in header_fields:
+            top_lo.removeWidget(field)
+        top_lo.removeWidget(sub_frame)
+        for index, field in enumerate(header_fields):
+            top_lo.addWidget(field, index // 4, index % 4)
+        top_lo.addWidget(sub_frame, 2, 0, 1, 4)
+        top_lo.setColumnStretch(1, 1)
+        top_lo.setColumnStretch(3, 1)
         pyside6_components._layout(sub_frame).setColumnStretch(4, 1)
 
         sampling_container = QWidget(tab_page)
@@ -438,12 +512,10 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
             self.model_tab.refresh_ui()
 
         if training_method != TrainingMethod.LORA and 'LoRA' in self._tab_widgets:
-            self.tabview.removeTab(self.tabview.indexOf(self._tab_widgets['LoRA']))
-            del self._tab_widgets['LoRA']
+            self._remove_training_method_tab('LoRA')
             self.lora_tab = None
         if training_method != TrainingMethod.EMBEDDING and 'embedding' in self._tab_widgets:
-            self.tabview.removeTab(self.tabview.indexOf(self._tab_widgets['embedding']))
-            del self._tab_widgets['embedding']
+            self._remove_training_method_tab('embedding')
 
         if training_method == TrainingMethod.LORA and 'LoRA' not in self._tab_widgets:
             self.lora_tab = PySide6LoraTabView(None, LoraTabController(self.controller.train_config), self.ui_state)
@@ -454,6 +526,16 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
             self.tabview.addTab(tab_page, 'embedding')
             self._tab_widgets['embedding'] = tab_page
         self._refresh_navigation()
+
+    def _remove_training_method_tab(self, key: str):
+        page = self._tab_widgets.pop(key)
+        index = self.tabview.indexOf(page)
+        if index >= 0:
+            self.tabview.removeTab(index)
+        # removeTab only detaches the page from QTabWidget. Destroy its fields
+        # as well so their validators and UIState traces cannot outlive it.
+        page.hide()
+        page.deleteLater()
 
     def load_preset(self):
         if self.additional_embeddings_tab:

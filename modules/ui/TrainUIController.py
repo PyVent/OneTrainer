@@ -299,9 +299,13 @@ class TrainUIController:
 
     def start_training(self):
         if self.training_thread is None:
-            self.view.save_default()
-
-            errors = flush_and_validate_all()
+            try:
+                self.view.save_default()
+                errors = flush_and_validate_all()
+            except Exception as exc:
+                traceback.print_exc()
+                self.view.show_validation_errors([f"Could not prepare training: {exc}"])
+                return
             if errors:
                 self.view.show_validation_errors(errors)
                 return
@@ -310,16 +314,24 @@ class TrainUIController:
                     and not self.view.confirm("Clear Cache Before Training", "Clear cache?"):
                 return
 
-            self.view.on_training_started()
+            try:
+                self.view.on_training_started()
 
-            if self.train_config.tensorboard and not self.train_config.tensorboard_always_on and self.always_on_tensorboard_subprocess:
-                self._stop_always_on_tensorboard()
+                if self.train_config.tensorboard and not self.train_config.tensorboard_always_on and self.always_on_tensorboard_subprocess:
+                    self._stop_always_on_tensorboard()
 
-            self.training_commands = TrainCommands()
-            torch_gc()
+                self.training_commands = TrainCommands()
+                torch_gc()
 
-            self.training_thread = threading.Thread(target=self.__training_thread_function)
-            self.training_thread.start()
+                self.training_thread = threading.Thread(target=self.__training_thread_function)
+                self.training_thread.start()
+            except Exception as exc:
+                self.training_thread = None
+                self.training_commands = None
+                self.view.on_training_stopped(True)
+                self.on_update_status("Error: training did not start")
+                traceback.print_exc()
+                self.view.show_validation_errors([f"Could not start training: {exc}"])
         else:
             self.view.on_training_stopping()
             self.on_update_status("Stopping ...")
