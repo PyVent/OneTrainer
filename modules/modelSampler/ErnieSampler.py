@@ -11,6 +11,7 @@ from modules.util.enum.ImageFormat import ImageFormat
 from modules.util.enum.ModelType import ModelType
 from modules.util.enum.NoiseScheduler import NoiseScheduler
 from modules.util.enum.VideoFormat import VideoFormat
+from modules.util.torch_util import torch_gc
 
 import torch
 
@@ -62,7 +63,7 @@ class ErnieSampler(BaseModelSampler):
             num_latent_channels = 32
 
             # encode text
-            self.model.materialize_only("text_encoder")
+            self.model.text_encoder_to(self.train_device)
 
             batch_size = 2 if cfg_scale > 1.0 else 1
             text_bth, text_lens = self.model.encode_text(
@@ -70,6 +71,9 @@ class ErnieSampler(BaseModelSampler):
                 text=[prompt, negative_prompt] if batch_size == 2 else prompt,
             )
             dtype = self.model.train_dtype.torch_dtype()
+
+            self.model.text_encoder_to(self.temp_device)
+            torch_gc()
 
             # prepare latents
             latent_image = torch.randn(
@@ -84,7 +88,7 @@ class ErnieSampler(BaseModelSampler):
             noise_scheduler.set_timesteps(sigmas=sigmas, device=self.train_device)
             timesteps = noise_scheduler.timesteps
 
-            self.model.materialize_only("transformer")
+            self.model.transformer_to(self.train_device)
             transformer = self.pipeline.transformer
 
             for i, timestep in enumerate(tqdm(timesteps, desc="sampling")):
@@ -108,7 +112,9 @@ class ErnieSampler(BaseModelSampler):
 
                 on_update_progress(i + 1, len(timesteps))
 
-            self.model.materialize_only("vae")
+            self.model.transformer_to(self.temp_device)
+            torch_gc()
+            self.model.vae_to(self.train_device)
 
             # unscale and unpatchify
             latents = self.model.unscale_latents(latent_image)
@@ -119,6 +125,9 @@ class ErnieSampler(BaseModelSampler):
             image = (image.clamp(-1, 1) + 1) / 2
             image = image.cpu().permute(0, 2, 3, 1).float().numpy()
             image = [PILImage.fromarray((img * 255).astype(np.uint8)) for img in image]
+
+            self.model.vae_to(self.temp_device)
+            torch_gc()
 
             return ModelSamplerOutput(
                 file_type=FileType.IMAGE,

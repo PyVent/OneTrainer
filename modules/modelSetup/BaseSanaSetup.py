@@ -16,7 +16,11 @@ from modules.util.checkpointing_util import (
     enable_checkpointing_for_sana_transformer,
 )
 from modules.util.config.TrainConfig import TrainConfig
-from modules.util.dtype_util import disable_fp16_autocast_context
+from modules.util.conv_util import apply_circular_padding_to_conv2d
+from modules.util.dtype_util import create_autocast_context, disable_fp16_autocast_context
+from modules.util.enum.TrainingMethod import TrainingMethod
+from modules.util.quantization_util import quantize_layers
+from modules.util.torch_util import torch_gc
 from modules.util.TrainProgress import TrainProgress
 
 import torch
@@ -49,22 +53,52 @@ class BaseSanaSetup(
             config: TrainConfig,
     ):
 
-        super().setup_optimizations(model, config)
+        if config.gradient_checkpointing.enabled():
+            # model.vae.enable_gradient_checkpointing()
+            model.transformer_offload_conductor = \
+                enable_checkpointing_for_sana_transformer(model.transformer, config)
+            model.text_encoder_offload_conductor = \
+                enable_checkpointing_for_gemma_layers(model.text_encoder, config)
 
-        # Sana's vae runs under its own fp16-disabled autocast in predict(). Inconsistently, vae_train_dtype
-        # is never read and the vae below is quantized with model.train_dtype, not this fp16-disabled dtype.
+        if config.force_circular_padding:
+            apply_circular_padding_to_conv2d(model.vae)
+            apply_circular_padding_to_conv2d(model.transformer)
+            if model.transformer_lora is not None:
+                apply_circular_padding_to_conv2d(model.transformer_lora)
+
+        model.autocast_context, model.train_dtype = create_autocast_context(self.train_device, config.train_dtype, [
+            config.weight_dtypes().transformer,
+            config.weight_dtypes().text_encoder,
+            config.weight_dtypes().vae,
+            config.weight_dtypes().lora if config.training_method == TrainingMethod.LORA else None,
+            config.weight_dtypes().embedding if config.train_any_embedding() else None,
+        ], config.enable_autocast_cache)
+
+        model.text_encoder_autocast_context, model.text_encoder_train_dtype = disable_fp16_autocast_context(
+            self.train_device,
+            config.train_dtype,
+            config.fallback_train_dtype,
+            [
+                config.weight_dtypes().text_encoder,
+                config.weight_dtypes().lora if config.training_method == TrainingMethod.LORA else None,
+                config.weight_dtypes().embedding if config.train_any_embedding() else None,
+            ],
+            config.enable_autocast_cache,
+        )
+
         model.vae_autocast_context, model.vae_train_dtype = disable_fp16_autocast_context(
             self.train_device,
             config.train_dtype,
             config.fallback_train_dtype,
+            [
+                config.weight_dtypes().vae,
+            ],
             config.enable_autocast_cache,
         )
 
-        self._setup_model_part(model, config, "transformer", config.transformer, enable_checkpointing_for_sana_transformer)
-        self._setup_model_part(model, config, "text_encoder", config.text_encoder, enable_checkpointing_for_gemma_layers, disable_fp16_autocast=True)
-        self._setup_model_part(model, config, "vae", config.vae)
-
-        self._set_attention_backend(model.transformer, config.attention_mechanism, mask=True)
+        quantize_layers(model.text_encoder, self.train_device, model.text_encoder_train_dtype, config)
+        quantize_layers(model.vae, self.train_device, model.train_dtype, config)
+        quantize_layers(model.transformer, self.train_device, model.train_dtype, config)
 
     def _setup_embeddings(
             self,
@@ -158,7 +192,7 @@ class BaseSanaSetup(
                 text_encoder_output=batch[
                     'text_encoder_hidden_state'] if not config.train_text_encoder_or_embedding() else None,
                 attention_mask=batch['tokens_mask'],
-                text_encoder_dropout_probability=config.text_encoder.dropout_probability if not deterministic else None,
+                text_encoder_dropout_probability=config.text_encoder.dropout_probability,
             )
 
             latent_image = batch['latent_image']
@@ -236,7 +270,10 @@ class BaseSanaSetup(
         ).mean()
 
     def prepare_text_caching(self, model: SanaModel, config: TrainConfig):
+        model.to(self.temp_device)
+
         if not config.train_text_encoder_or_embedding():
-            model.materialize_only("text_encoder")
+            model.text_encoder_to(self.train_device)
 
         model.eval()
+        torch_gc()

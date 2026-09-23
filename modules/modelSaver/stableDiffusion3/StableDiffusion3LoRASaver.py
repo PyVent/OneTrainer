@@ -1,7 +1,10 @@
 from modules.model.StableDiffusion3Model import StableDiffusion3Model
 from modules.modelSaver.mixin.LoRASaverMixin import LoRASaverMixin
-from modules.util.convert_lora_util import convert_to_mixture
+from modules.util.convert.lora.convert_lora_util import LoraConversionKeySet
+from modules.util.convert.lora.convert_sd3_lora import convert_sd3_lora_key_sets
+from modules.util.enum.ModelFormat import ModelFormat
 
+import torch
 from torch import Tensor
 
 
@@ -11,8 +14,8 @@ class StableDiffusion3LoRASaver(
     def __init__(self):
         super().__init__()
 
-    def _convert_legacy(self, model: StableDiffusion3Model, state_dict: dict[str, Tensor]) -> dict[str, Tensor]:
-        return convert_to_mixture(state_dict)
+    def _get_convert_key_sets(self, model: StableDiffusion3Model) -> list[LoraConversionKeySet] | None:
+        return convert_sd3_lora_key_sets()
 
     def _get_state_dict(
             self,
@@ -48,3 +51,12 @@ class StableDiffusion3LoRASaver(
                     state_dict[f"bundle_emb.{placeholder}.t5_out"] = embedding.text_encoder_3_embedding.output_vector
 
         return state_dict
+
+    def save(
+            self,
+            model: StableDiffusion3Model,
+            output_model_format: ModelFormat,
+            output_model_destination: str,
+            dtype: torch.dtype | None,
+    ):
+        self._save(model, output_model_format, output_model_destination, dtype)

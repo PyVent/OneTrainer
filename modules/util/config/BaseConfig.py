@@ -63,20 +63,19 @@ class BaseConfig:
 
         return data
 
-    def from_dict(self, data: dict, migrate: bool = True) -> 'BaseConfig':
-        if migrate:
-            version = 0
-            if '__version' in data:
-                version = data['__version']
+    def from_dict(self, data: dict) -> 'BaseConfig':
+        version = 0
+        if '__version' in data:
+            version = data['__version']
 
-            while version in self.config_migrations:
-                data = self.config_migrations[version](data)
-                version += 1
+        while version in self.config_migrations:
+            data = self.config_migrations[version](data)
+            version += 1
 
         for name in self.types:
             try:
                 if issubclass_safe(self.types[name], BaseConfig):
-                    getattr(self, name).from_dict(data[name], migrate=migrate)
+                    getattr(self, name).from_dict(data[name])
                 elif self.types[name] is list or get_origin(self.types[name]) is list:
                     if len(get_args(self.types[name])) > 0 and issubclass_safe(get_args(self.types[name])[0], BaseConfig):
                         list_type = get_args(self.types[name])[0]
@@ -86,9 +85,9 @@ class BaseConfig:
                             value = []
                             for i in range(len(data[name])):
                                 if i < len(old_value) and i < len(data[name]):
-                                    value.append(old_value[i].from_dict(data[name][i], migrate=migrate))
+                                    value.append(old_value[i].from_dict(data[name][i]))
                                 else:
-                                    value.append(list_type.default_values().from_dict(data[name][i], migrate=migrate))
+                                    value.append(list_type.default_values().from_dict(data[name][i]))
                         else:
                             value = None
                         setattr(self, name, value)
@@ -99,7 +98,7 @@ class BaseConfig:
                         dict_type = get_args(self.types[name])[1]
                         value = {}
                         for dict_key, dict_value in data[name].items():
-                            value[dict_key] = dict_type.default_values().from_dict(dict_value, migrate=migrate)
+                            value[dict_key] = dict_type.default_values().from_dict(dict_value)
                         setattr(self, name, value)
                     else:
                         setattr(self, name, data[name])

@@ -24,8 +24,6 @@ from mgds.pipelineModules.ScaleImage import ScaleImage
 from mgds.pipelineModules.Tokenize import Tokenize
 
 
-@factory.register(BaseDataLoader, ModelType.PIXART_ALPHA)
-@factory.register(BaseDataLoader, ModelType.PIXART_SIGMA)
 class PixArtAlphaBaseDataLoader(
     BaseDataLoader,
     DataLoaderText2ImageMixin,
@@ -121,7 +119,7 @@ class PixArtAlphaBaseDataLoader(
         debug_dir = os.path.join(config.debug_dir, "dataloader")
 
         def before_save_fun():
-            model.materialize("vae")
+            model.vae_to(self.train_device)
 
         decode_image = DecodeVAE(in_name='latent_image', out_name='decoded_image', vae=model.vae, autocast_contexts=[model.autocast_context], dtype=model.train_dtype.torch_dtype())
         decode_conditioning_image = DecodeVAE(in_name='latent_conditioning_image', out_name='decoded_conditioning_image', vae=model.vae, autocast_contexts=[model.autocast_context], dtype=model.train_dtype.torch_dtype())
@@ -161,3 +159,6 @@ class PixArtAlphaBaseDataLoader(
             config, model, model_setup, train_progress, is_validation,
             aspect_bucketing_quantization=16,
         )
+
+factory.register(BaseDataLoader, PixArtAlphaBaseDataLoader, ModelType.PIXART_ALPHA)
+factory.register(BaseDataLoader, PixArtAlphaBaseDataLoader, ModelType.PIXART_SIGMA)

@@ -13,10 +13,21 @@ from modules.util.TrainProgress import TrainProgress
 import torch
 
 
-@factory.register(BaseModelSetup, ModelType.HUNYUAN_VIDEO, TrainingMethod.FINE_TUNE)
 class HunyuanVideoFineTuneSetup(
     BaseHunyuanVideoSetup,
 ):
+    def __init__(
+            self,
+            train_device: torch.device,
+            temp_device: torch.device,
+            debug_mode: bool,
+    ):
+        super().__init__(
+            train_device=train_device,
+            temp_device=temp_device,
+            debug_mode=debug_mode,
+        )
+
     def create_parameters(
             self,
             model: HunyuanVideoModel,
@@ -72,10 +83,9 @@ class HunyuanVideoFineTuneSetup(
         self._setup_embeddings(model, config)
         self._setup_embedding_wrapper(model, config)
         model.output_embedding = torch.zeros(size=(4, 4096), dtype=config.train_dtype.torch_dtype(), device=self.train_device)
-
-        params = self.create_parameters(model, config)
         self.__setup_requires_grad(model, config)
-        init_model_parameters(model, params, self.train_device)
+
+        init_model_parameters(model, self.create_parameters(model, config), self.train_device)
 
     def setup_train_device(
             self,
@@ -91,14 +101,10 @@ class HunyuanVideoFineTuneSetup(
             config.train_text_encoder_2_or_embedding() \
             or not config.latent_caching
 
-        parts = ["transformer"]
-        if text_encoder_1_on_train_device:
-            parts.append("text_encoder")
-        if text_encoder_2_on_train_device:
-            parts.append("text_encoder_2")
-        if vae_on_train_device:
-            parts.append("vae")
-        model.materialize_only(*parts)
+        model.text_encoder_1_to(self.train_device if text_encoder_1_on_train_device else self.temp_device)
+        model.text_encoder_2_to(self.train_device if text_encoder_2_on_train_device else self.temp_device)
+        model.vae_to(self.train_device if vae_on_train_device else self.temp_device)
+        model.transformer_to(self.train_device)
 
         if model.text_encoder_1:
             if config.text_encoder.train:
@@ -132,3 +138,5 @@ class HunyuanVideoFineTuneSetup(
             if model.embedding_wrapper_2 is not None:
                 model.embedding_wrapper_2.normalize_embeddings()
         self.__setup_requires_grad(model, config)
+
+factory.register(BaseModelSetup, HunyuanVideoFineTuneSetup, ModelType.HUNYUAN_VIDEO, TrainingMethod.FINE_TUNE)

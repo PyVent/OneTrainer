@@ -13,11 +13,24 @@ from modules.util.optimizer_util import init_model_parameters
 from modules.util.torch_util import state_dict_has_prefix
 from modules.util.TrainProgress import TrainProgress
 
+import torch
 
-@factory.register(BaseModelSetup, ModelType.HUNYUAN_VIDEO, TrainingMethod.LORA)
+
 class HunyuanVideoLoRASetup(
     BaseHunyuanVideoSetup,
 ):
+    def __init__(
+            self,
+            train_device: torch.device,
+            temp_device: torch.device,
+            debug_mode: bool,
+    ):
+        super().__init__(
+            train_device=train_device,
+            temp_device=temp_device,
+            debug_mode=debug_mode,
+        )
+
     def create_parameters(
             self,
             model: HunyuanVideoModel,
@@ -67,22 +80,21 @@ class HunyuanVideoLoRASetup(
             model: HunyuanVideoModel,
             config: TrainConfig,
     ):
-        create_te1 = config.text_encoder.train or state_dict_has_prefix(model.lora_state_dict, "text_encoder")
-        create_te2 = config.text_encoder_2.train or state_dict_has_prefix(model.lora_state_dict, "text_encoder_2")
+        create_te1 = config.text_encoder.train or state_dict_has_prefix(model.lora_state_dict, "lora_te1")
+        create_te2 = config.text_encoder_2.train or state_dict_has_prefix(model.lora_state_dict, "lora_te2")
 
         if model.text_encoder_1 is not None:
             model.text_encoder_1_lora = LoRAModuleWrapper(
-                model.text_encoder_1, "text_encoder", config
+                model.text_encoder_1, "lora_te1", config
             ) if create_te1 else None
 
         if model.text_encoder_2 is not None:
             model.text_encoder_2_lora = LoRAModuleWrapper(
-                model.text_encoder_2, "text_encoder_2", config
+                model.text_encoder_2, "lora_te2", config
             ) if create_te2 else None
 
         model.transformer_lora = LoRAModuleWrapper(
-            model.transformer, "transformer", config, config.layer_filter.split(","),
-            fusion_spec=model.fusion_groups(), fuse=config.output_model_format.needs_qkv_fusion(),
+            model.transformer, "lora_transformer", config, config.layer_filter.split(",")
         )
 
         if model.lora_state_dict:
@@ -117,10 +129,9 @@ class HunyuanVideoLoRASetup(
         model.tokenizer_2 = copy.deepcopy(model.orig_tokenizer_2)
         self._setup_embeddings(model, config)
         self._setup_embedding_wrapper(model, config)
-
-        params = self.create_parameters(model, config)
         self.__setup_requires_grad(model, config)
-        init_model_parameters(model, params, self.train_device)
+
+        init_model_parameters(model, self.create_parameters(model, config), self.train_device)
 
     def setup_train_device(
             self,
@@ -136,14 +147,10 @@ class HunyuanVideoLoRASetup(
             config.train_text_encoder_2_or_embedding() \
             or not config.latent_caching
 
-        parts = ["transformer"]
-        if text_encoder_1_on_train_device:
-            parts.append("text_encoder")
-        if text_encoder_2_on_train_device:
-            parts.append("text_encoder_2")
-        if vae_on_train_device:
-            parts.append("vae")
-        model.materialize_only(*parts)
+        model.text_encoder_1_to(self.train_device if text_encoder_1_on_train_device else self.temp_device)
+        model.text_encoder_2_to(self.train_device if text_encoder_2_on_train_device else self.temp_device)
+        model.vae_to(self.train_device if vae_on_train_device else self.temp_device)
+        model.transformer_to(self.train_device)
 
         if model.text_encoder_1:
             if config.text_encoder.train:
@@ -178,3 +185,5 @@ class HunyuanVideoLoRASetup(
                 model.embedding_wrapper_2.normalize_embeddings()
 
         self.__setup_requires_grad(model, config)
+
+factory.register(BaseModelSetup, HunyuanVideoLoRASetup, ModelType.HUNYUAN_VIDEO, TrainingMethod.LORA)

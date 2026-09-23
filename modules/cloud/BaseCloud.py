@@ -2,7 +2,6 @@ import json
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
 
-from modules.util import path_util
 from modules.util.callbacks.TrainCallbacks import TrainCallbacks
 from modules.util.commands.TrainCommands import TrainCommands
 from modules.util.config.CloudConfig import CloudConfig
@@ -55,7 +54,6 @@ class BaseCloud(metaclass=ABCMeta):
             if hasattr(add_embedding,"local_model_name"):
                 self.file_sync.sync_up(local=Path(add_embedding.local_model_name),remote=Path(add_embedding.model_name))
 
-        concept_extensions = path_util.supported_image_extensions() | path_util.supported_video_extensions() | path_util.supported_caption_extensions()
         for concept in self.config.concepts:
             print(f"uploading concept {concept.name}...")
             if commands and commands.get_stop_command():
@@ -65,15 +63,10 @@ class BaseCloud(metaclass=ABCMeta):
                 self.file_sync.sync_up_dir(
                     local=Path(concept.local_path),
                     remote=Path(concept.path),
-                    recursive=concept.include_subdirectories,
-                    skip_hidden=True,
-                    allowed_extensions=concept_extensions)
+                    recursive=concept.include_subdirectories)
 
             if hasattr(concept.text,"local_prompt_path"):
                 self.file_sync.sync_up_file(local=Path(concept.text.local_prompt_path),remote=Path(concept.text.prompt_path))
-
-            if hasattr(concept.text,"local_tag_dropout_special_tags"):
-                self.file_sync.sync_up_file(local=Path(concept.text.local_tag_dropout_special_tags),remote=Path(concept.text.tag_dropout_special_tags))
 
     @staticmethod
     def _filter_download(config : CloudConfig,path : Path):

@@ -16,12 +16,18 @@ from modules.util.checkpointing_util import (
     enable_checkpointing_for_t5_encoder_layers,
 )
 from modules.util.config.TrainConfig import TrainConfig
+from modules.util.conv_util import apply_circular_padding_to_conv2d
+from modules.util.dtype_util import create_autocast_context, disable_fp16_autocast_context
+from modules.util.enum.TrainingMethod import TrainingMethod
+from modules.util.quantization_util import quantize_layers
+from modules.util.torch_util import torch_gc
 from modules.util.TrainProgress import TrainProgress
 
 import torch
 from torch import Tensor
 
 
+#TODO share more code with Flux and other models
 class BaseChromaSetup(
     BaseModelSetup,
     ModelSetupDiffusionLossMixin,
@@ -33,7 +39,7 @@ class BaseChromaSetup(
     metaclass=ABCMeta
 ):
     LAYER_PRESETS = {
-        "attn-mlp": ["attn", "ff.net", "proj_mlp"],
+        "attn-mlp": ["attn", "ff.net"],
         "attn-only": ["attn"],
         "blocks": ["transformer_block"],
         "full": [],
@@ -44,12 +50,43 @@ class BaseChromaSetup(
             model: ChromaModel,
             config: TrainConfig,
     ):
-        super().setup_optimizations(model, config)
-        self._setup_model_part(model, config, "transformer", config.transformer, enable_checkpointing_for_chroma_transformer)
-        self._setup_model_part(model, config, "text_encoder", config.text_encoder, enable_checkpointing_for_t5_encoder_layers, disable_fp16_autocast=True)
-        self._setup_model_part(model, config, "vae", config.vae)
+        if config.gradient_checkpointing.enabled():
+            model.transformer_offload_conductor = \
+                enable_checkpointing_for_chroma_transformer(model.transformer, config)
+            if model.text_encoder is not None:
+                model.text_encoder_offload_conductor = \
+                    enable_checkpointing_for_t5_encoder_layers(model.text_encoder, config)
 
-        self._set_attention_backend(model.transformer, config.attention_mechanism, mask=True)
+        if config.force_circular_padding: #TODO useful for Chroma?
+            apply_circular_padding_to_conv2d(model.vae)
+            apply_circular_padding_to_conv2d(model.transformer)
+            if model.transformer_lora is not None:
+                apply_circular_padding_to_conv2d(model.transformer_lora)
+
+        model.autocast_context, model.train_dtype = create_autocast_context(self.train_device, config.train_dtype, [
+            config.weight_dtypes().transformer,
+            config.weight_dtypes().text_encoder,
+            config.weight_dtypes().vae,
+            config.weight_dtypes().lora if config.training_method == TrainingMethod.LORA else None,
+            config.weight_dtypes().embedding if config.train_any_embedding() else None,
+        ], config.enable_autocast_cache)
+
+        model.text_encoder_autocast_context, model.text_encoder_train_dtype = \
+            disable_fp16_autocast_context(
+                self.train_device,
+                config.train_dtype,
+                config.fallback_train_dtype,
+                [
+                    config.weight_dtypes().text_encoder,
+                    config.weight_dtypes().lora if config.training_method == TrainingMethod.LORA else None,
+                    config.weight_dtypes().embedding if config.train_any_embedding() else None,
+                ],
+                config.enable_autocast_cache,
+            )
+
+        quantize_layers(model.text_encoder, self.train_device, model.text_encoder_train_dtype, config)
+        quantize_layers(model.vae, self.train_device, model.train_dtype, config)
+        quantize_layers(model.transformer, self.train_device, model.train_dtype, config)
 
     def _setup_embeddings(
             self,
@@ -101,7 +138,7 @@ class BaseChromaSetup(
             model: ChromaModel,
             config: TrainConfig,
     ):
-        if model.tokenizer is not None:
+        if model.tokenizer is not None and model.text_encoder is not None:
             model.embedding_wrapper = AdditionalEmbeddingWrapper(
                 tokenizer=model.tokenizer,
                 orig_module=model.text_encoder.encoder.embed_tokens,
@@ -116,13 +153,14 @@ class BaseChromaSetup(
             model: ChromaModel,
             config: TrainConfig,
     ):
-        for embedding, embedding_config in zip(model.all_text_encoder_embeddings(),
-                                               config.all_embedding_configs(), strict=True):
-            train_embedding = \
-                embedding_config.train \
-                and config.text_encoder.train_embedding \
-                and not self.stop_embedding_training_elapsed(embedding_config, model.train_progress)
-            embedding.requires_grad_(train_embedding)
+        if model.text_encoder is not None:
+            for embedding, embedding_config in zip(model.all_text_encoder_embeddings(),
+                                                   config.all_embedding_configs(), strict=True):
+                train_embedding = \
+                    embedding_config.train \
+                    and config.text_encoder.train_embedding \
+                    and not self.stop_embedding_training_elapsed(embedding_config, model.train_progress)
+                embedding.requires_grad_(train_embedding)
 
     def predict(
             self,
@@ -151,7 +189,7 @@ class BaseChromaSetup(
                 text_encoder_layer_skip=config.text_encoder_layer_skip,
                 text_encoder_output=batch['text_encoder_hidden_state'] \
                     if 'text_encoder_hidden_state' in batch and not config.train_text_encoder_or_embedding() else None,
-                text_encoder_dropout_probability=config.text_encoder.dropout_probability if not deterministic else None,
+                text_encoder_dropout_probability=config.text_encoder.dropout_probability,
             )
 
             latent_image = batch['latent_image']
@@ -248,7 +286,10 @@ class BaseChromaSetup(
 
 
     def prepare_text_caching(self, model: ChromaModel, config: TrainConfig):
+        model.to(self.temp_device)
+
         if not config.train_text_encoder_or_embedding():
-            model.materialize_only("text_encoder")
+            model.text_encoder_to(self.train_device)
 
         model.eval()
+        torch_gc()

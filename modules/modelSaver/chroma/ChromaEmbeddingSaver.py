@@ -62,8 +62,6 @@ class ChromaEmbeddingSaver(
                     embedding_uuid,
                     output_model_destination,
                 )
-            case _:
-                raise NotImplementedError(f"Unsupported embedding output format: {output_model_format}")
 
     def save_multiple(
             self,
@@ -107,5 +105,3 @@ class ChromaEmbeddingSaver(
                         embedding_uuid,
                         output_model_destination,
                     )
-                case _:
-                    raise NotImplementedError(f"Unsupported embedding output format: {output_model_format}")

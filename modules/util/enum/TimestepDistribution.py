@@ -8,7 +8,6 @@ class TimestepDistribution(Enum):
     HEAVY_TAIL = 'HEAVY_TAIL'
     COS_MAP = 'COS_MAP'
     INVERTED_PARABOLA = 'INVERTED_PARABOLA'
-    BETA = 'BETA'
 
     def __str__(self):
         return self.value

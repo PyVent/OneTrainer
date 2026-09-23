@@ -27,7 +27,7 @@ class StableDiffusionModelSaver(
             dtype: torch.dtype | None,
     ):
         # Copy the model to cpu by first moving the original model to cpu. This preserves some VRAM.
-        pipeline = model.create_pipeline(use_original_tokenizers=True)
+        pipeline = model.create_pipeline()
         pipeline.to("cpu")
 
         if dtype is not None:
@@ -54,8 +54,7 @@ class StableDiffusionModelSaver(
             model.vae.state_dict(),
             model.unet.state_dict(),
             model.text_encoder.state_dict(),
-            model.noise_scheduler,
-            model.checkpoint_diffusers_to_original(),
+            model.noise_scheduler
         )
         save_state_dict = self._convert_state_dict_dtype(state_dict, dtype)
         self._convert_state_dict_to_contiguous(save_state_dict)
@@ -86,9 +85,7 @@ class StableDiffusionModelSaver(
         match output_model_format:
             case ModelFormat.DIFFUSERS:
                 self.__save_diffusers(model, output_model_destination, dtype)
-            case ModelFormat.LEGACY_SAFETENSORS | ModelFormat.ORIGINAL_SINGLE_FILE:
+            case ModelFormat.SAFETENSORS:
                 self.__save_safetensors(model, model_type, output_model_destination, dtype)
             case ModelFormat.INTERNAL:
                 self.__save_internal(model, output_model_destination)
-            case _:
-                raise NotImplementedError(f"Unsupported output format: {output_model_format}")

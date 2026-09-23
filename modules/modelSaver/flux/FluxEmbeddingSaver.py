@@ -66,8 +66,6 @@ class FluxEmbeddingSaver(
                     embedding_uuid,
                     output_model_destination,
                 )
-            case _:
-                raise NotImplementedError(f"Unsupported embedding output format: {output_model_format}")
 
     def save_multiple(
             self,
@@ -111,5 +109,3 @@ class FluxEmbeddingSaver(
                         embedding_uuid,
                         output_model_destination,
                     )
-                case _:
-                    raise NotImplementedError(f"Unsupported embedding output format: {output_model_format}")

@@ -10,6 +10,7 @@ from modules.modelSetup.BaseWuerstchenSetup import BaseWuerstchenSetup
 from modules.util import factory
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.enum.ModelType import ModelType
+from modules.util.torch_util import torch_gc
 from modules.util.TrainProgress import TrainProgress
 
 from mgds.pipelineModules.DecodeTokens import DecodeTokens
@@ -22,8 +23,6 @@ from mgds.pipelineModules.ScaleImage import ScaleImage
 from mgds.pipelineModules.Tokenize import Tokenize
 
 
-@factory.register(BaseDataLoader, ModelType.WUERSTCHEN_2)
-@factory.register(BaseDataLoader, ModelType.STABLE_CASCADE_1)
 class WuerstchenBaseDataLoader(
     BaseDataLoader,
     DataLoaderText2ImageMixin,
@@ -73,8 +72,10 @@ class WuerstchenBaseDataLoader(
         ]
 
         def before_cache_image_fun():
-            model.materialize_only("effnet_encoder")
+            model.to(self.temp_device)
+            model.effnet_encoder_to(self.train_device)
             model.eval()
+            torch_gc()
 
         return self._cache_modules_from_names(
             model, model_setup,
@@ -106,8 +107,10 @@ class WuerstchenBaseDataLoader(
                 output_names.append('pooled_text_encoder_output')
 
         def before_cache_image_fun():
-            model.materialize_only("effnet_encoder")
+            model.to(self.temp_device)
+            model.effnet_encoder_to(self.train_device)
             model.eval()
+            torch_gc()
 
         return self._output_modules_from_out_names(
             model, model_setup,
@@ -153,3 +156,6 @@ class WuerstchenBaseDataLoader(
             aspect_bucketing_quantization=128,
             supports_inpainting=False,
         )
+
+factory.register(BaseDataLoader, WuerstchenBaseDataLoader, ModelType.WUERSTCHEN_2)
+factory.register(BaseDataLoader, WuerstchenBaseDataLoader, ModelType.STABLE_CASCADE_1)

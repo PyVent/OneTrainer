@@ -1,7 +1,10 @@
 from modules.model.FluxModel import FluxModel
 from modules.modelSaver.mixin.LoRASaverMixin import LoRASaverMixin
-from modules.util.convert_lora_util import convert_to_mixture
+from modules.util.convert.lora.convert_flux_lora import convert_flux_lora_key_sets
+from modules.util.convert.lora.convert_lora_util import LoraConversionKeySet
+from modules.util.enum.ModelFormat import ModelFormat
 
+import torch
 from torch import Tensor
 
 
@@ -11,8 +14,8 @@ class FluxLoRASaver(
     def __init__(self):
         super().__init__()
 
-    def _convert_legacy(self, model: FluxModel, state_dict: dict[str, Tensor]) -> dict[str, Tensor]:
-        return convert_to_mixture(state_dict)
+    def _get_convert_key_sets(self, model: FluxModel) -> list[LoraConversionKeySet] | None:
+        return convert_flux_lora_key_sets()
 
     def _get_state_dict(
             self,
@@ -42,3 +45,12 @@ class FluxLoRASaver(
                     state_dict[f"bundle_emb.{placeholder}.t5_out"] = embedding.text_encoder_2_embedding.output_vector
 
         return state_dict
+
+    def save(
+            self,
+            model: FluxModel,
+            output_model_format: ModelFormat,
+            output_model_destination: str,
+            dtype: torch.dtype | None,
+    ):
+        self._save(model, output_model_format, output_model_destination, dtype)

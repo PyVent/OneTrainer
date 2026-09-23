@@ -9,11 +9,24 @@ from modules.util.NamedParameterGroup import NamedParameterGroupCollection
 from modules.util.optimizer_util import init_model_parameters
 from modules.util.TrainProgress import TrainProgress
 
+import torch
 
-@factory.register(BaseModelSetup, ModelType.CHROMA_1, TrainingMethod.EMBEDDING)
+
 class ChromaEmbeddingSetup(
     BaseChromaSetup,
 ):
+    def __init__(
+            self,
+            train_device: torch.device,
+            temp_device: torch.device,
+            debug_mode: bool,
+    ):
+        super().__init__(
+            train_device=train_device,
+            temp_device=temp_device,
+            debug_mode=debug_mode,
+        )
+
     def create_parameters(
             self,
             model: ChromaModel,
@@ -21,7 +34,7 @@ class ChromaEmbeddingSetup(
     ) -> NamedParameterGroupCollection:
         parameter_group_collection = NamedParameterGroupCollection()
 
-        if config.text_encoder.train_embedding:
+        if config.text_encoder.train_embedding and model.text_encoder is not None:
             self._add_embedding_param_groups(
                 model.all_text_encoder_embeddings(), parameter_group_collection, config.embedding_learning_rate,
                 "embeddings"
@@ -35,7 +48,8 @@ class ChromaEmbeddingSetup(
             config: TrainConfig,
     ):
         self._setup_embeddings_requires_grad(model, config)
-        model.text_encoder.requires_grad_(False)
+        if model.text_encoder is not None:
+            model.text_encoder.requires_grad_(False)
         model.transformer.requires_grad_(False)
         model.vae.requires_grad_(False)
 
@@ -44,14 +58,15 @@ class ChromaEmbeddingSetup(
             model: ChromaModel,
             config: TrainConfig,
     ):
-        model.text_encoder.get_input_embeddings().to(dtype=config.embedding_weight_dtype.torch_dtype())
+        if model.text_encoder is not None:
+            model.text_encoder.get_input_embeddings().to(dtype=config.embedding_weight_dtype.torch_dtype())
 
+        self._remove_added_embeddings_from_tokenizer(model.tokenizer)
         self._setup_embeddings(model, config)
         self._setup_embedding_wrapper(model, config)
-
-        params = self.create_parameters(model, config)
         self.__setup_requires_grad(model, config)
-        init_model_parameters(model, params, self.train_device)
+
+        init_model_parameters(model, self.create_parameters(model, config), self.train_device)
 
     def setup_train_device(
             self,
@@ -60,14 +75,12 @@ class ChromaEmbeddingSetup(
     ):
         vae_on_train_device = not config.latent_caching
 
-        parts = ["transformer"]
-        if config.text_encoder.train_embedding:
-            parts.append("text_encoder")
-        if vae_on_train_device:
-            parts.append("vae")
-        model.materialize_only(*parts)
+        model.text_encoder_to(self.train_device if config.text_encoder.train_embedding else self.temp_device)
+        model.vae_to(self.train_device if vae_on_train_device else self.temp_device)
+        model.transformer_to(self.train_device)
 
-        model.text_encoder.eval()
+        if model.text_encoder is not None:
+            model.text_encoder.eval()
         model.vae.eval()
         model.transformer.eval()
 
@@ -82,3 +95,5 @@ class ChromaEmbeddingSetup(
             if model.embedding_wrapper is not None:
                 model.embedding_wrapper.normalize_embeddings()
         self.__setup_requires_grad(model, config)
+
+factory.register(BaseModelSetup, ChromaEmbeddingSetup, ModelType.CHROMA_1, TrainingMethod.EMBEDDING)

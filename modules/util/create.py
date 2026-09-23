@@ -50,11 +50,20 @@ from diffusers import (
     UniPCMultistepScheduler,
 )
 
-factory.import_dir("modules/modelSampler", "modules.modelSampler")
-factory.import_dir("modules/modelLoader", "modules.modelLoader")
-factory.import_dir("modules/modelSaver", "modules.modelSaver")
-factory.import_dir("modules/modelSetup", "modules.modelSetup")
-factory.import_dir("modules/dataLoader", "modules.dataLoader")
+_unsupported_model_prefixes = tuple(
+    prefix for prefix, model_type in (
+        ("Anima", "ANIMA"),
+        ("Ernie", "ERNIE"),
+        ("Ideogram", "IDEOGRAM_4"),
+        ("Krea2", "KREA_2"),
+    ) if model_type not in ModelType.__members__
+)
+
+factory.import_dir("modules/modelSampler", "modules.modelSampler", _unsupported_model_prefixes)
+factory.import_dir("modules/modelLoader", "modules.modelLoader", _unsupported_model_prefixes)
+factory.import_dir("modules/modelSaver", "modules.modelSaver", _unsupported_model_prefixes)
+factory.import_dir("modules/modelSetup", "modules.modelSetup", _unsupported_model_prefixes)
+factory.import_dir("modules/dataLoader", "modules.dataLoader", _unsupported_model_prefixes)
 
 def create_model_loader(
         model_type: ModelType,
@@ -110,12 +119,8 @@ def create_data_loader(
         train_progress: TrainProgress | None = None,
         is_validation: bool = False
 ) -> BaseDataLoader | None:
-    # Layer offloading uses a non-thread-safe conductor. Only text encoders run inside the caching dataloader's
-    # worker threads (to produce the text cache), so only their offload_fraction can conflict with threading.
-    if config.dataloader_threads > 1 and any(
-        getattr(config, name).offload_fraction > 0 for name in model_type.text_encoder_parts()
-    ):
-        raise RuntimeError('layer offloading can not be activated for a text encoder if "dataloader_threads" > 1')
+    if config.gradient_checkpointing.offload() and config.layer_offload_fraction > 0 and config.dataloader_threads > 1:
+        raise RuntimeError('layer offloading can not be activated if "dataloader_threads" > 1')
 
     if train_progress is None:
         train_progress = TrainProgress()
@@ -130,6 +135,7 @@ def create_optimizer(
         state_dict: dict | None,
         config: TrainConfig,
         layer_key_fn: dict[int, str] | None = None,
+        riemannion_pair_map: dict[int, tuple[str, int]] | None = None,
 ) -> torch.optim.Optimizer | None:
     optimizer = None
     optimizer_config = config.optimizer
@@ -137,13 +143,15 @@ def create_optimizer(
     if optimizer_config.optimizer is None:
         return None
 
-    # a trained, layer-offloaded part has its params evicted during the back pass, so it needs fused_back_pass
-    if any(part.offload_fraction > 0 and part.train for part in config.model_part_configs()):
+    if config.gradient_checkpointing.offload() and config.layer_offload_fraction > 0:
         if (not optimizer_config.optimizer.supports_fused_back_pass() or not optimizer_config.fused_back_pass) \
                 and config.training_method == TrainingMethod.FINE_TUNE:
             raise RuntimeError('layer offloading can only be used for fine tuning when using an optimizer that supports "fused_back_pass"')
 
     parameters = parameter_group_collection.parameters_for_optimizer(config)
+    if optimizer_config.optimizer == Optimizer.RIEMANNION:
+        for group, unique_name in zip(parameters, parameter_group_collection.unique_name_mapping, strict=True):
+            group['unique_name'] = unique_name
 
     match config.optimizer.optimizer:
 
@@ -677,16 +685,19 @@ def create_optimizer(
                        optimizer_config.beta2 if optimizer_config.beta2 is not None else 0.99),
                 eps=optimizer_config.eps if optimizer_config.eps is not None else 1e-8,
                 weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 0.0,
+                use_bias_correction=optimizer_config.use_bias_correction if optimizer_config.use_bias_correction is not None else True,
                 nnmf_factor=optimizer_config.nnmf_factor if optimizer_config.nnmf_factor is not None else False,
                 cautious_wd=optimizer_config.cautious_wd if optimizer_config.cautious_wd is not None else False,
                 stochastic_rounding=optimizer_config.stochastic_rounding,
                 use_atan2=optimizer_config.use_atan2 if optimizer_config.use_atan2 is not None else False,
+                cautious_mask=optimizer_config.cautious_mask if optimizer_config.cautious_mask is not None else False,
+                grams_moment=optimizer_config.grams_moment if optimizer_config.grams_moment is not None else False,
                 orthogonal_gradient=optimizer_config.orthogonal_gradient if optimizer_config.orthogonal_gradient is not None else False,
                 use_AdEMAMix=optimizer_config.use_AdEMAMix if optimizer_config.use_AdEMAMix is not None else False,
                 beta3_ema=optimizer_config.beta3 if optimizer_config.beta3 is not None else 0.9999,
                 alpha=optimizer_config.alpha if optimizer_config.alpha is not None else 5,
                 kourkoutas_beta=optimizer_config.kourkoutas_beta if optimizer_config.kourkoutas_beta is not None else False,
-                k_warmup_steps=(config.learning_rate_warmup_steps / config.gradient_accumulation_steps),
+                k_warmup_steps=optimizer_config.k_warmup_steps if optimizer_config.k_warmup_steps is not None else 0,
                 compiled_optimizer=optimizer_config.compile if optimizer_config.compile is not None else False,
             )
 
@@ -704,6 +715,8 @@ def create_optimizer(
                 cautious_wd=optimizer_config.cautious_wd if optimizer_config.cautious_wd is not None else False,
                 stochastic_rounding=optimizer_config.stochastic_rounding,
                 use_atan2=optimizer_config.use_atan2 if optimizer_config.use_atan2 is not None else False,
+                cautious_mask=optimizer_config.cautious_mask if optimizer_config.cautious_mask is not None else False,
+                grams_moment=optimizer_config.grams_moment if optimizer_config.grams_moment is not None else False,
                 orthogonal_gradient=optimizer_config.orthogonal_gradient if optimizer_config.orthogonal_gradient is not None else False,
                 use_AdEMAMix=optimizer_config.use_AdEMAMix if optimizer_config.use_AdEMAMix is not None else False,
                 beta3_ema=optimizer_config.beta3 if optimizer_config.beta3 is not None else 0.9999,
@@ -711,7 +724,7 @@ def create_optimizer(
                 Simplified_AdEMAMix=optimizer_config.Simplified_AdEMAMix if optimizer_config.Simplified_AdEMAMix is not None else False,
                 alpha_grad=optimizer_config.alpha_grad if optimizer_config.alpha_grad is not None else 100,
                 kourkoutas_beta=optimizer_config.kourkoutas_beta if optimizer_config.kourkoutas_beta is not None else False,
-                k_warmup_steps=(config.learning_rate_warmup_steps / config.gradient_accumulation_steps),
+                k_warmup_steps=optimizer_config.k_warmup_steps if optimizer_config.k_warmup_steps is not None else 0,
                 compiled_optimizer=optimizer_config.compile if optimizer_config.compile is not None else False,
             )
 
@@ -736,6 +749,8 @@ def create_optimizer(
                 prodigy_steps=optimizer_config.prodigy_steps if optimizer_config.prodigy_steps is not None else 0,
                 d_limiter=optimizer_config.d_limiter if optimizer_config.d_limiter is not None else False,
                 use_atan2=optimizer_config.use_atan2 if optimizer_config.use_atan2 is not None else False,
+                cautious_mask=optimizer_config.cautious_mask if optimizer_config.cautious_mask is not None else False,
+                grams_moment=optimizer_config.grams_moment if optimizer_config.grams_moment is not None else False,
                 orthogonal_gradient=optimizer_config.orthogonal_gradient if optimizer_config.orthogonal_gradient is not None else False,
                 use_AdEMAMix=optimizer_config.use_AdEMAMix if optimizer_config.use_AdEMAMix is not None else False,
                 beta3_ema=optimizer_config.beta3_ema if optimizer_config.beta3_ema is not None else 0.9999,
@@ -743,7 +758,30 @@ def create_optimizer(
                 Simplified_AdEMAMix=optimizer_config.Simplified_AdEMAMix if optimizer_config.Simplified_AdEMAMix is not None else False,
                 alpha_grad=optimizer_config.alpha_grad if optimizer_config.alpha_grad is not None else 100,
                 kourkoutas_beta=optimizer_config.kourkoutas_beta if optimizer_config.kourkoutas_beta is not None else False,
-                k_warmup_steps=(config.learning_rate_warmup_steps / config.gradient_accumulation_steps),
+                k_warmup_steps=optimizer_config.k_warmup_steps if optimizer_config.k_warmup_steps is not None else 0,
+                compiled_optimizer=optimizer_config.compile if optimizer_config.compile is not None else False,
+            )
+
+        # SIMPLIFIED_AdEMAMix Optimizer
+        case Optimizer.SIMPLIFIED_AdEMAMix:
+            from adv_optm import Simplified_AdEMAMix
+            optimizer = Simplified_AdEMAMix(
+                params=parameters,
+                lr=config.learning_rate,
+                betas=(optimizer_config.beta1 if optimizer_config.beta1 is not None else 0.99,
+                       optimizer_config.beta2 if optimizer_config.beta2 is not None else 0.999),
+                eps=optimizer_config.eps if optimizer_config.eps is not None else 1e-8,
+                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 0.0,
+                alpha_grad=optimizer_config.alpha_grad if optimizer_config.alpha_grad is not None else 100,
+                beta1_warmup=optimizer_config.beta1_warmup if optimizer_config.beta1_warmup is not None else None,
+                min_beta1=optimizer_config.min_beta1 if optimizer_config.min_beta1 is not None else 0.9,
+                use_bias_correction=optimizer_config.use_bias_correction if optimizer_config.use_bias_correction is not None else True,
+                nnmf_factor=optimizer_config.nnmf_factor if optimizer_config.nnmf_factor is not None else False,
+                cautious_wd=optimizer_config.cautious_wd if optimizer_config.cautious_wd is not None else False,
+                stochastic_rounding=optimizer_config.stochastic_rounding,
+                orthogonal_gradient=optimizer_config.orthogonal_gradient if optimizer_config.orthogonal_gradient is not None else False,
+                kourkoutas_beta=optimizer_config.kourkoutas_beta if optimizer_config.kourkoutas_beta is not None else False,
+                k_warmup_steps=optimizer_config.k_warmup_steps if optimizer_config.k_warmup_steps is not None else 0,
                 compiled_optimizer=optimizer_config.compile if optimizer_config.compile is not None else False,
             )
 
@@ -777,7 +815,36 @@ def create_optimizer(
                 nnmf_factor=optimizer_config.nnmf_factor if optimizer_config.nnmf_factor is not None else False,
                 cautious_wd=optimizer_config.cautious_wd if optimizer_config.cautious_wd is not None else False,
                 stochastic_rounding=optimizer_config.stochastic_rounding,
+                cautious_mask=optimizer_config.cautious_mask if optimizer_config.cautious_mask is not None else False,
                 orthogonal_gradient=optimizer_config.orthogonal_gradient if optimizer_config.orthogonal_gradient is not None else False,
+                kappa_p=optimizer_config.kappa_p if optimizer_config.kappa_p is not None else 1.0,
+                auto_kappa_p=optimizer_config.auto_kappa_p if optimizer_config.auto_kappa_p is not None else False,
+                compiled_optimizer=optimizer_config.compile if optimizer_config.compile is not None else False,
+            )
+
+        # LION_PRODIGY_ADV Optimizer
+        case Optimizer.LION_PRODIGY_ADV:
+            from adv_optm import Lion_Prodigy_adv
+            optimizer = Lion_Prodigy_adv(
+                params=parameters,
+                lr=config.learning_rate,
+                betas=(optimizer_config.beta1 if optimizer_config.beta1 is not None else 0.9,
+                       optimizer_config.beta2 if optimizer_config.beta2 is not None else 0.99),
+                beta3=optimizer_config.beta3 if optimizer_config.beta3 is not None else None,
+                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 0.0,
+                clip_threshold=optimizer_config.clip_threshold if optimizer_config.clip_threshold is not None else 0.0,
+                nnmf_factor=optimizer_config.nnmf_factor if optimizer_config.nnmf_factor is not None else False,
+                cautious_wd=optimizer_config.cautious_wd if optimizer_config.cautious_wd is not None else False,
+                stochastic_rounding=optimizer_config.stochastic_rounding,
+                d0=optimizer_config.d0 if optimizer_config.d0 is not None else 1e-6,
+                d_coef=optimizer_config.d_coef if optimizer_config.d_coef is not None else 1.0,
+                growth_rate=optimizer_config.growth_rate if optimizer_config.growth_rate is not None else float('inf'),
+                slice_p=optimizer_config.slice_p if optimizer_config.slice_p is not None else 1,
+                prodigy_steps=optimizer_config.prodigy_steps if optimizer_config.prodigy_steps is not None else 0,
+                d_limiter=optimizer_config.d_limiter if optimizer_config.d_limiter is not None else False,
+                cautious_mask=optimizer_config.cautious_mask if optimizer_config.cautious_mask is not None else False,
+                orthogonal_gradient=optimizer_config.orthogonal_gradient if optimizer_config.orthogonal_gradient is not None else False,
+                kappa_p=optimizer_config.kappa_p if optimizer_config.kappa_p is not None else 1.0,
                 auto_kappa_p=optimizer_config.auto_kappa_p if optimizer_config.auto_kappa_p is not None else False,
                 compiled_optimizer=optimizer_config.compile if optimizer_config.compile is not None else False,
             )
@@ -822,14 +889,13 @@ def create_optimizer(
                 nesterov=optimizer_config.nesterov if optimizer_config.nesterov is not None else True,
                 normuon_variant=optimizer_config.normuon_variant if optimizer_config.normuon_variant is not None else False,
                 beta2_normuon=optimizer_config.beta2_normuon if optimizer_config.beta2_normuon is not None else 0.95,
+                normuon_eps=optimizer_config.normuon_eps if optimizer_config.normuon_eps is not None else 1e-8,
                 low_rank_ortho=optimizer_config.low_rank_ortho if optimizer_config.low_rank_ortho is not None else False,
                 ortho_rank=optimizer_config.ortho_rank if optimizer_config.ortho_rank is not None else 128,
                 accelerated_ns=optimizer_config.accelerated_ns if optimizer_config.accelerated_ns is not None else False,
                 orthogonal_gradient=optimizer_config.orthogonal_gradient if optimizer_config.orthogonal_gradient is not None else False,
                 approx_mars=optimizer_config.approx_mars if optimizer_config.approx_mars is not None else False,
                 compiled_optimizer=optimizer_config.compile if optimizer_config.compile is not None else False,
-                Simplified_AdEMAMix=optimizer_config.Simplified_AdEMAMix if optimizer_config.Simplified_AdEMAMix is not None else False,
-                alpha_grad=optimizer_config.alpha_grad if optimizer_config.alpha_grad is not None else 100,
                 **adam_kwargs
             )
 
@@ -887,6 +953,12 @@ def create_optimizer(
                 **adam_kwargs
             )
 
+        # Riemannion optimizes both factors of each LoRA layer together.
+        case Optimizer.RIEMANNION:
+            from modules.util.optimizer.riemannion_util import create_riemannion_optimizer
+
+            optimizer = create_riemannion_optimizer(parameters, riemannion_pair_map, config)
+
         # MUON Optimizer
         case Optimizer.MUON:
 
@@ -908,7 +980,9 @@ def create_optimizer(
                     }
                 else:  # is adam
                     adam_config = optimizer_config.muon_adam_config
-                    if not isinstance(adam_config, dict):
+                    if adam_config is None:
+                        adam_config = {}
+                    elif not isinstance(adam_config, dict):
                         adam_config = adam_config.to_dict()
 
                     beta1 = adam_config.get('beta1')
@@ -1037,10 +1111,10 @@ def create_optimizer(
             old_group_optimizer_mapping = state_dict['param_group_optimizer_mapping']
 
             new_param_groups = optimizer.state_dict()['param_groups']
-            if config.optimizer.MuonWithAuxAdam:
+            if any('optim_type' in group for group in optimizer.param_groups):
                 new_group_mapping = []
                 for group in optimizer.param_groups:
-                    original_name = group.get('name')
+                    original_name = group.get('unique_name', group.get('name'))
 
                     optim_type = group.get('optim_type', 'unknown')
                     unique_name = f"{original_name}_{optim_type}"

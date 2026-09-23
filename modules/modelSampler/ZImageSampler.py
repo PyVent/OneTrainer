@@ -12,13 +12,13 @@ from modules.util.enum.ImageFormat import ImageFormat
 from modules.util.enum.ModelType import ModelType
 from modules.util.enum.NoiseScheduler import NoiseScheduler
 from modules.util.enum.VideoFormat import VideoFormat
+from modules.util.torch_util import torch_gc
 
 import torch
 
 from tqdm import tqdm
 
 
-@factory.register(BaseModelSampler, ModelType.Z_IMAGE)
 class ZImageSampler(BaseModelSampler):
     def __init__(
             self,
@@ -64,7 +64,7 @@ class ZImageSampler(BaseModelSampler):
             #patch_size = 2
 
             # prepare prompt
-            self.model.materialize_only("text_encoder")
+            self.model.text_encoder_to(self.train_device)
 
             batch_size = 2 if cfg_scale > 1.0 else 1
             prompt_embedding = self.model.encode_text(
@@ -72,6 +72,9 @@ class ZImageSampler(BaseModelSampler):
                 batch_size=batch_size,
                 train_device=self.train_device,
             )
+
+            self.model.text_encoder_to(self.temp_device)
+            torch_gc()
 
             # prepare latent image
             latent_image = torch.randn(
@@ -90,7 +93,7 @@ class ZImageSampler(BaseModelSampler):
             if "generator" in set(inspect.signature(noise_scheduler.step).parameters.keys()):
                 extra_step_kwargs["generator"] = generator
 
-            self.model.materialize_only("transformer")
+            self.model.transformer_to(self.train_device)
             for i, timestep in enumerate(tqdm(timesteps, desc="sampling")):
                 latent_model_input = latent_image.unsqueeze(2).to(dtype=self.model.train_dtype.torch_dtype())
                 latent_model_input = torch.cat([latent_model_input] * batch_size)
@@ -114,12 +117,17 @@ class ZImageSampler(BaseModelSampler):
 
                 on_update_progress(i + 1, len(timesteps))
 
-            self.model.materialize_only("vae")
+            self.model.transformer_to(self.temp_device)
+            torch_gc()
+            self.model.vae_to(self.train_device)
 
             latents = self.model.unscale_latents(latent_image)
             image = vae.decode(latents, return_dict=False)[0]
 
             image = image_processor.postprocess(image, output_type='pil')
+
+            self.model.vae_to(self.temp_device)
+            torch_gc()
 
             return ModelSamplerOutput(
                 file_type=FileType.IMAGE,
@@ -155,3 +163,5 @@ class ZImageSampler(BaseModelSampler):
         )
 
         on_sample(sampler_output)
+
+factory.register(BaseModelSampler, ZImageSampler, ModelType.Z_IMAGE)

@@ -13,7 +13,7 @@ class BaseConvertModelUIView:
         # model type
         self.components.label(frame, 0, 0, "Model Type",
                          tooltip="Type of the model")
-        self.components.options_kv(frame, 0, 1, [ #TODO simplify
+        model_types = [ #TODO simplify
             ("Stable Diffusion 1.5", ModelType.STABLE_DIFFUSION_15),
             ("Stable Diffusion 1.5 Inpainting", ModelType.STABLE_DIFFUSION_15_INPAINTING),
             ("Stable Diffusion 2.0", ModelType.STABLE_DIFFUSION_20),
@@ -33,11 +33,14 @@ class BaseConvertModelUIView:
             ("Hunyuan Video", ModelType.HUNYUAN_VIDEO),
             ("Chroma1", ModelType.CHROMA_1), #TODO does this just work? HiDream is not here
             ("QwenImage", ModelType.QWEN), #TODO does this just work? HiDream is not here
-            ("Anima", ModelType.ANIMA),
-            ("Krea 2", ModelType.KREA_2),
             ("ZImage", ModelType.Z_IMAGE),
-            ("Ideogram 4", ModelType.IDEOGRAM_4),
-        ], ui_state, "model_type", command=on_model_or_method_change)
+        ]
+        model_types.extend((label, ModelType[name]) for label, name in (
+            ("Anima", "ANIMA"),
+            ("Krea 2", "KREA_2"),
+            ("Ideogram 4", "IDEOGRAM_4"),
+        ) if name in ModelType.__members__)
+        self.components.options_kv(frame, 0, 1, model_types, ui_state, "model_type", command=on_model_or_method_change)
 
         # training method
         self.components.label(frame, 1, 0, "Model Type",
