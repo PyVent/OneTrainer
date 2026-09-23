@@ -10,11 +10,11 @@ Please read docs/Contributing.md / docs/ProjectStructure.md for the project guid
 ## Test plan
 
 <!--
-OneTrainer has no automated test suite. Manual verification is expected.
-Describe what you actually did, not what you "would do".
+Describe what you actually verified, not what you "would do".
 -->
 
 - [ ] `pre-commit run --all-files` passes
+- [ ] `python -m unittest discover -s tests -v` passes
 - [ ] Launched the affected UI or script and exercised the change
 - [ ] Tested with at least one real preset / config when relevant (note which: ____)
 
