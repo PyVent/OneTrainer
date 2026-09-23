@@ -1,61 +1,41 @@
 @echo off
+setlocal
 
-REM Avoid footgun by explictly navigating to the directory containing the batch file
 cd /d "%~dp0"
+if errorlevel 1 goto :failure
 
-REM Verify that OneTrainer is our current working directory
 if not exist "scripts\train_ui_qt.py" (
-    echo Error: train_ui_qt.py does not exist, you have done something very wrong. Reclone the repository.
-    goto :end
+    echo Error: scripts\train_ui_qt.py is missing.
+    goto :failure
 )
 
-if not defined PYTHON (
-    where python >NUL 2>NUL
-    if errorlevel 1 (
-        echo Error: Python is not installed or not in PATH
-        goto :end
-    )
-    set PYTHON=python
-)
-if not defined VENV_DIR (set "VENV_DIR=%~dp0venv")
-
-:check_venv
-dir "%VENV_DIR%" > NUL 2> NUL
-if not errorlevel 1 goto :activate_venv
-echo venv not found, please run install.bat first
-goto :end
-
-:activate_venv
-echo activating venv %VENV_DIR%
-if not exist "%VENV_DIR%\Scripts\python.exe" (
-    echo Error: Python executable not found in virtual environment
-    goto :end
-)
-set PYTHON="%VENV_DIR%\Scripts\python.exe" -X utf8
-if defined PROFILE (set PYTHON=%PYTHON% -m scalene --off --cpu --gpu --profile-all --no-browser)
-echo Using Python %PYTHON%
-
-:check_python_version
-echo Checking Python version...
-%PYTHON% --version
-if errorlevel 1 (
-    echo Error: Failed to get Python version
-    goto :end_error
+if not defined VENV_DIR set "VENV_DIR=%~dp0venv"
+set "PYTHON_EXE=%VENV_DIR%\Scripts\python.exe"
+if not exist "%PYTHON_EXE%" (
+    echo Error: virtual environment not found. Run install.bat first.
+    goto :failure
 )
 
-echo.
-%PYTHON% "%~dp0scripts\util\version_check.py" 3.10 3.14 2>&1
-if errorlevel 1 (
-    echo.
-    goto :wrong_python_version
-)
+echo Using Python "%PYTHON_EXE%"
+"%PYTHON_EXE%" --version
+if errorlevel 1 goto :failure
 
-:launch
-echo Starting UI...
-%PYTHON% scripts\train_ui_qt.py
-if errorlevel 1 (
-    echo Error: UI script exited with code %ERRORLEVEL%
-)
+"%PYTHON_EXE%" "%~dp0scripts\util\version_check.py" 3.10 3.14
+if errorlevel 1 goto :failure
 
-:end
-pause
+echo Starting PySide6 UI...
+if defined PROFILE (
+    "%PYTHON_EXE%" -X utf8 -m scalene --off --cpu --gpu --profile-all --no-browser scripts\train_ui_qt.py
+) else (
+    "%PYTHON_EXE%" -X utf8 scripts\train_ui_qt.py
+)
+set "EXIT_CODE=%ERRORLEVEL%"
+if not "%EXIT_CODE%"=="0" echo Error: UI script exited with code %EXIT_CODE%.
+goto :finish
+
+:failure
+set "EXIT_CODE=1"
+
+:finish
+if not defined ONETRAINER_NO_PAUSE pause
+exit /b %EXIT_CODE%

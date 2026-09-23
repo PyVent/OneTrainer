@@ -88,7 +88,7 @@ For a technically focused quick start, see the [Quick Start Guide](docs/QuickSta
 
 #### Windows
 
--   To start the UI, navigate to the OneTrainer folder and double-click `start-ui.bat`
+-   To start the current PySide6 UI on Windows, navigate to the OneTrainer folder and double-click `start.bat` (`start-ui.bat` remains available for existing shortcuts).
 
 #### Unix-based systems
 

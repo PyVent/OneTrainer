@@ -10,7 +10,7 @@ debug*.py
 
 # user data
 /workspace*
-/models/*
+/models*
 /training_concepts
 /training_samples
 /training_user_settings

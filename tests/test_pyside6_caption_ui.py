@@ -1,8 +1,10 @@
 import os
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -26,6 +28,12 @@ class CaptionUITest(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp_dir.cleanup)
         self.path = Path(self.temp_dir.name)
+
+    def wait_for_dialog(self, view):
+        deadline = time.monotonic() + 3
+        while view._running and time.monotonic() < deadline:
+            QTest.qWait(10)
+        self.assertFalse(view._running, "Batch generation did not finish")
 
     def test_open_edit_save_and_close(self):
         Image.new("RGB", (40, 20), "red").save(self.path / "first.png")
@@ -76,6 +84,7 @@ class CaptionUITest(unittest.TestCase):
         mask_view.model.setCurrentText("Hex Color")
         mask_view.prompt.setText("subject")
         mask_view.create_masks()
+        self.wait_for_dialog(mask_view)
         mask_controller.create_masks.assert_called_once_with(
             model_name="Hex Color", path=str(self.path), prompt="subject",
             mode_str="Create if absent", alpha_str="1.0", threshold_str="0.3",
@@ -89,12 +98,60 @@ class CaptionUITest(unittest.TestCase):
         caption_view = PySide6GenerateCaptionsWindowView(None, caption_controller, str(self.path), False)
         caption_view.caption_prefix.setText("prefix")
         caption_view.create_captions()
+        self.wait_for_dialog(caption_view)
         caption_controller.create_captions.assert_called_once_with(
             model_name="Blip", path=str(self.path), initial_caption="",
             caption_prefix="prefix", caption_postfix="",
             mode_str="Create if absent", include_subdirectories=False,
         )
         caption_view.close()
+
+    def test_batch_dialogs_keep_ui_responsive_and_block_close(self):
+        for view_cls, method_name, start_name in (
+            (PySide6GenerateMasksWindowView, "create_masks", "create_masks"),
+            (PySide6GenerateCaptionsWindowView, "create_captions", "create_captions"),
+        ):
+            with self.subTest(view=view_cls.__name__):
+                started = threading.Event()
+                release = threading.Event()
+                controller = Mock()
+                view = view_cls(None, controller, str(self.path), False)
+                view.show()
+
+                def generate(**_options):
+                    started.set()
+                    release.wait(timeout=2)
+                    view.set_progress(2, 4)
+
+                getattr(controller, method_name).side_effect = generate
+                getattr(view, start_name)()
+                try:
+                    self.assertTrue(started.wait(timeout=1))
+                    self.app.processEvents()
+                    self.assertFalse(view.create_button.isEnabled())
+                    view.close()
+                    self.assertTrue(view.isVisible())
+                    view.reject()
+                    self.assertTrue(view.isVisible())
+                    self.assertEqual(getattr(controller, method_name).call_count, 1)
+                finally:
+                    release.set()
+                    self.wait_for_dialog(view)
+                    self.assertTrue(view.create_button.isEnabled())
+                    self.assertEqual(view.progress.value(), 2)
+                    self.assertEqual(view.progress_label.text(), "Progress: 2/4")
+                    view.close()
+
+    def test_batch_error_restores_button(self):
+        controller = Mock()
+        controller.create_masks.side_effect = RuntimeError("model unavailable")
+        view = PySide6GenerateMasksWindowView(None, controller, str(self.path), False)
+        with patch("modules.ui.PySide6GenerateMasksWindowView.QMessageBox.critical") as show_error:
+            view.create_masks()
+            self.wait_for_dialog(view)
+        show_error.assert_called_once_with(view, "Mask generation failed", "model unavailable")
+        self.assertTrue(view.create_button.isEnabled())
+        view.close()
 
 
 if __name__ == "__main__":

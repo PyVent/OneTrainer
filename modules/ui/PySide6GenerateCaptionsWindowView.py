@@ -1,18 +1,24 @@
 import os
 
-from PySide6.QtCore import QEventLoop
+from PySide6.QtCore import Signal, Slot
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
+    QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
     QHBoxLayout, QLabel, QLineEdit, QMessageBox, QProgressBar, QPushButton,
     QVBoxLayout, QWidget,
 )
 
+from modules.ui.PySide6GenerateMasksWindowView import _BatchGenerationThread
+
 
 class PySide6GenerateCaptionsWindowView(QDialog):
+    _progress_requested = Signal(int, int)
+
     def __init__(self, parent, controller, path, parent_include_subdirectories):
         super().__init__(parent)
         self.controller = controller
         self._running = False
+        self._worker = None
+        self._progress_requested.connect(self._apply_progress)
         self.setWindowTitle("Batch generate captions")
         self.resize(460, 350)
 
@@ -67,32 +73,50 @@ class PySide6GenerateCaptionsWindowView(QDialog):
             self.path.setText(path)
 
     def set_progress(self, value, max_value):
+        self._progress_requested.emit(value, max_value)
+
+    @Slot(int, int)
+    def _apply_progress(self, value, max_value):
         self.progress.setRange(0, max(1, max_value))
         self.progress.setValue(value)
         self.progress_label.setText(f"Progress: {value}/{max_value}")
-        QApplication.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
 
     def create_captions(self):
+        if self._running:
+            return
         if not os.path.isdir(self.path.text()):
             QMessageBox.warning(self, "Invalid folder", "Choose an existing image folder.")
             return
+        options = dict(
+            model_name=self.model.currentText(),
+            path=self.path.text(),
+            initial_caption=self.initial_caption.text(),
+            caption_prefix=self.caption_prefix.text(),
+            caption_postfix=self.caption_postfix.text(),
+            mode_str=self.mode.currentText(),
+            include_subdirectories=self.include_subdirectories.isChecked(),
+        )
         self._running = True
         self.create_button.setEnabled(False)
-        try:
-            self.controller.create_captions(
-                model_name=self.model.currentText(),
-                path=self.path.text(),
-                initial_caption=self.initial_caption.text(),
-                caption_prefix=self.caption_prefix.text(),
-                caption_postfix=self.caption_postfix.text(),
-                mode_str=self.mode.currentText(),
-                include_subdirectories=self.include_subdirectories.isChecked(),
-            )
-        except Exception as exc:
-            QMessageBox.critical(self, "Caption generation failed", str(exc))
-        finally:
-            self._running = False
-            self.create_button.setEnabled(True)
+        self._worker = _BatchGenerationThread(self.controller.create_captions, options, self)
+        self._worker.failed.connect(self._on_failed)
+        self._worker.finished.connect(self._on_finished)
+        self._worker.start()
+
+    @Slot(str)
+    def _on_failed(self, message):
+        QMessageBox.critical(self, "Caption generation failed", message)
+
+    @Slot()
+    def _on_finished(self):
+        self._running = False
+        self.create_button.setEnabled(True)
+        self._worker.deleteLater()
+        self._worker = None
+
+    def done(self, result):
+        if not self._running:
+            super().done(result)
 
     def closeEvent(self, event):
         if self._running:

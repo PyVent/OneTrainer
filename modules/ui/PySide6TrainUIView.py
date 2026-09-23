@@ -33,9 +33,19 @@ from modules.util.ui.pyside6_navigation import WorkflowNavigation
 from modules.util.ui.pyside6_util import QtABCMeta
 from modules.util.ui.PySide6UIState import PySide6UIState
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QFileDialog, QGridLayout, QHBoxLayout, QMainWindow, QMessageBox, QTabWidget, QWidget
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QFormLayout,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QMainWindow,
+    QMessageBox,
+    QTabWidget,
+    QWidget,
+)
 
 
 class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
@@ -237,10 +247,45 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
 
     def _configure_general_frame(self, frame):
         lo = pyside6_components._layout(frame)
-        lo.setColumnStretch(1, 1)
-        lo.setColumnStretch(3, 1)
         self.build_general_tab_content(frame, self.controller, self.ui_state)
-        pyside6_components._pack_form(frame)
+
+        # Keep the shared field builder and its UIState bindings intact. Move
+        # the finished widgets into Qt form layouts so labels and controls can
+        # wrap naturally when the main window is narrowed.
+        fields = {}
+        groups = (
+            ("Paths and run safety", ((0, 0), (0, 2), (2, 0), (2, 2), (3, 0), (4, 0), (4, 2))),
+            ("Monitoring and validation", ((6, 0), (6, 2), (7, 0), (7, 2), (8, 0), (8, 2))),
+            ("Devices and performance", ((10, 0), (11, 0), (11, 2), (12, 0), (12, 2),
+                                         (13, 0), (13, 2), (14, 0), (14, 2), (15, 0))),
+        )
+        for _, positions in groups:
+            for row, col in positions:
+                for offset in (0, 1):
+                    item = lo.itemAtPosition(row, col + offset)
+                    if item is None or item.widget() is None:
+                        raise RuntimeError(f"Missing General field at row {row}, column {col + offset}")
+                    fields[row, col + offset] = item.widget()
+
+        while lo.count():
+            lo.takeAt(0)
+
+        lo.setContentsMargins(12, 12, 12, 12)
+        lo.setVerticalSpacing(14)
+        lo.setColumnStretch(0, 1)
+        for group_row, (title, positions) in enumerate(groups):
+            group = QGroupBox(title, frame)
+            form = QFormLayout(group)
+            form.setContentsMargins(16, 18, 16, 16)
+            form.setHorizontalSpacing(22)
+            form.setVerticalSpacing(10)
+            form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+            form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+            for row, col in positions:
+                form.addRow(fields[row, col], fields[row, col + 1])
+            lo.addWidget(group, group_row, 0)
+        lo.setRowStretch(len(groups), 1)
 
     def _configure_data_frame(self, frame):
         lo = pyside6_components._layout(frame)
