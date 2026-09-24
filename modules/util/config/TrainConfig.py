@@ -4,6 +4,7 @@ import uuid
 from copy import deepcopy
 from typing import Any
 
+from modules.util.backup_util import complete_backup_paths
 from modules.util.config.BaseConfig import BaseConfig
 from modules.util.config.CloudConfig import CloudConfig
 from modules.util.config.ConceptConfig import ConceptConfig
@@ -956,18 +957,8 @@ class TrainConfig(BaseConfig):
 
     def get_last_backup_path(self) -> str | None:
         backups_path = os.path.join(self.workspace_dir, "backup")
-        if os.path.exists(backups_path):
-            backup_paths = sorted(
-                [path for path in os.listdir(backups_path) if
-                 os.path.isdir(os.path.join(backups_path, path))],
-                reverse=True,
-            )
-
-            if backup_paths:
-                last_backup_path = backup_paths[0]
-                return os.path.join(backups_path, last_backup_path)
-
-        return None
+        backup_paths = complete_backup_paths(backups_path)
+        return backup_paths[0] if backup_paths else None
 
     def to_settings_dict(self, secrets: bool) -> dict:
         config = TrainConfig.default_values().from_dict(self.to_dict())
