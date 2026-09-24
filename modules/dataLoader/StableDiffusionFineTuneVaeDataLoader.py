@@ -2,6 +2,7 @@ import os
 import re
 
 from modules.dataLoader.BaseDataLoader import BaseDataLoader
+from modules.dataLoader.ProgressCollectPaths import ProgressCollectPaths
 from modules.model.StableDiffusionModel import StableDiffusionModel
 from modules.modelSetup.BaseModelSetup import BaseModelSetup
 from modules.util import factory, path_util
@@ -14,7 +15,6 @@ from mgds.OutputPipelineModule import OutputPipelineModule
 from mgds.pipelineModules.AspectBatchSorting import AspectBatchSorting
 from mgds.pipelineModules.AspectBucketing import AspectBucketing
 from mgds.pipelineModules.CalcAspect import CalcAspect
-from mgds.pipelineModules.CollectPaths import CollectPaths
 from mgds.pipelineModules.DecodeVAE import DecodeVAE
 from mgds.pipelineModules.DiskCache import DiskCache
 from mgds.pipelineModules.EncodeVAE import EncodeVAE
@@ -61,7 +61,7 @@ class StableDiffusionFineTuneVaeDataLoader(BaseDataLoader):
     def __enumerate_input_modules(self, config: TrainConfig) -> list:
         supported_extensions = path_util.supported_image_extensions()
 
-        collect_paths = CollectPaths(
+        collect_paths = ProgressCollectPaths(
             concept_in_name='concept', path_in_name='path', include_subdirectories_in_name='concept.include_subdirectories', enabled_in_name='enabled',
             path_out_name='image_path', concept_out_name='concept',
             extensions=supported_extensions, include_postfix=None, exclude_postfix=['-masklabel']

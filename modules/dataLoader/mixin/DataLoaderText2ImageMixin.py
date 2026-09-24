@@ -4,6 +4,7 @@ from abc import ABCMeta, abstractmethod
 from collections.abc import Callable
 
 import modules.util.multi_gpu_util as multi
+from modules.dataLoader.ProgressCollectPaths import ProgressCollectPaths
 from modules.model.BaseModel import BaseModel
 from modules.modelSetup.BaseModelSetup import BaseModelSetup
 from modules.modelSetup.mixin.ModelSetupText2ImageMixin import ModelSetupText2ImageMixin
@@ -17,7 +18,6 @@ from mgds.pipelineModules.AspectBatchSorting import AspectBatchSorting
 from mgds.pipelineModules.AspectBucketing import AspectBucketing
 from mgds.pipelineModules.CalcAspect import CalcAspect
 from mgds.pipelineModules.CapitalizeTags import CapitalizeTags
-from mgds.pipelineModules.CollectPaths import CollectPaths
 from mgds.pipelineModules.DiskCache import DiskCache
 from mgds.pipelineModules.DistributedSampler import DistributedSampler
 from mgds.pipelineModules.DownloadHuggingfaceDatasets import DownloadHuggingfaceDatasets
@@ -67,7 +67,7 @@ class DataLoaderText2ImageMixin(metaclass=ABCMeta):
             concept_out_name='concept',
         )
 
-        collect_paths = CollectPaths(
+        collect_paths = ProgressCollectPaths(
             concept_in_name='concept', path_in_name='path', include_subdirectories_in_name='concept.include_subdirectories', enabled_in_name='enabled',
             path_out_name='image_path', concept_out_name='concept',
             extensions=supported_extensions, include_postfix=None, exclude_postfix=['-masklabel','-condlabel']
