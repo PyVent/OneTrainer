@@ -6,6 +6,7 @@ from modules.modelLoader.GenericFineTuneModelLoader import make_fine_tune_model_
 from modules.modelLoader.GenericLoRAModelLoader import make_lora_model_loader
 from modules.modelLoader.mixin.HFModelLoaderMixin import HFModelLoaderMixin
 from modules.modelLoader.mixin.LoRALoaderMixin import LoRALoaderMixin
+from modules.modelLoader.vae_source_validation import validate_anima_vae_source
 from modules.util.config.TrainConfig import QuantizationConfig
 from modules.util.enum.ModelType import ModelType
 from modules.util.ModelNames import ModelNames
@@ -141,6 +142,7 @@ class AnimaModelLoader(
             weight_dtypes: ModelWeightDtypes,
             quantization: QuantizationConfig,
     ):
+        validate_anima_vae_source(model_names.vae_model)
         stacktraces = []
 
         try:

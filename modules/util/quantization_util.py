@@ -206,10 +206,7 @@ def replace_linear_with_quantized_layers(
             kwargs.update({'rank': quantization.svd_rank,
                            'svd_dtype': quantization.svd_dtype.torch_dtype(),
                            'cache_dir': quantization.cache_dir})
-        quant_filters = [
-            ModuleFilter(pattern, use_regex=quantization.layer_filter_regex)
-            for pattern in quantization.layer_filter.split(",")
-        ]
+        quant_filters = ModuleFilter.from_string(quantization.layer_filter, quantization.layer_filter_regex)
     else:
         quant_filters = None
 

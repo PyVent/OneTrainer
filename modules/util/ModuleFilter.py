@@ -37,9 +37,17 @@ class ModuleFilter:
 
     @staticmethod
     def create(config: TrainConfig):
+        return ModuleFilter.from_string(config.layer_filter, config.layer_filter_regex)
+
+    @staticmethod
+    def from_string(patterns: str, use_regex: bool = False):
+        selected = [pattern.strip() for pattern in patterns.split(",") if pattern.strip()]
+        # An entirely empty filter means all layers; blank entries beside a real pattern do not.
+        if not selected:
+            selected = [""]
         return [
-            ModuleFilter(pattern, use_regex=config.layer_filter_regex)
-            for pattern in config.layer_filter.split(",")
+            ModuleFilter(pattern, use_regex=use_regex)
+            for pattern in selected
         ]
 
 
