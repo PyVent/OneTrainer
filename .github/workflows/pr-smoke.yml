@@ -27,6 +27,12 @@ jobs:
         run: python -m unittest discover -s tests -p test_backup_util.py -v
       - name: Check sample path progress
         run: python -m unittest discover -s tests -p test_sample_path_progress.py -v
+      - name: Check learning rate schedules
+        run: python -m unittest discover -s tests -p test_lr_scheduler_util.py -v
+      - name: Check training timing
+        run: python -m unittest discover -s tests -p test_training_timing.py -v
+      - name: Check atomic configuration writes
+        run: python -m unittest discover -s tests -p test_json_atomic_write.py -v
       - name: Check Qt entrypoints
         run: python -m unittest discover -s tests -p test_qt_only_interface.py -v
       - name: Check training UI lifecycle
