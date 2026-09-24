@@ -16,10 +16,12 @@ class OptimizerParamsWindowController:
 
     def restore_optimizer_config(self, ui_state):
         optimizer_config = change_optimizer(self.config)
+        self.config.optimizer = optimizer_config
         ui_state.get_var("optimizer").update(optimizer_config)
 
     def load_defaults(self, ui_state):
         optimizer_config = load_optimizer_defaults(self.config)
+        self.config.optimizer = optimizer_config
         ui_state.get_var("optimizer").update(optimizer_config)
 
     def on_close(self):

@@ -1,11 +1,13 @@
 import unittest
 
-from PySide6.QtCore import QObject
-from shiboken6 import delete
-
+from modules.ui.OptimizerParamsWindowController import OptimizerParamsWindowController
+from modules.ui.TrainingTabController import TrainingTabController
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.ui.PySide6UIState import PySide6UIState
 from modules.util.ui.QtVar import QtVar
+
+from PySide6.QtCore import QObject
+from shiboken6 import delete
 
 
 class StateBindingTest(unittest.TestCase):
@@ -34,6 +36,22 @@ class StateBindingTest(unittest.TestCase):
         self.assertEqual(original.optimizer.adam_w_mode, original_adam_mode)
         self.assertEqual(replacement.learning_rate, 0.00042)
         self.assertEqual(replacement.optimizer.adam_w_mode, not original_adam_mode)
+
+    def test_optimizer_refresh_keeps_ui_and_saved_config_on_same_object(self):
+        config = TrainConfig.default_values()
+        state = PySide6UIState(config)
+        training = TrainingTabController(config)
+        optimizer_window = OptimizerParamsWindowController(config)
+
+        for refresh in (
+            training.restore_optimizer_config,
+            optimizer_window.restore_optimizer_config,
+            optimizer_window.load_defaults,
+        ):
+            refresh(state)
+            self.assertIs(state.get_var("optimizer").obj, config.optimizer)
+            state.get_var("optimizer.momentum").set("0.7")
+            self.assertEqual(config.optimizer.momentum, 0.7)
 
 
 if __name__ == "__main__":

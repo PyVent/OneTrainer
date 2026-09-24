@@ -194,6 +194,9 @@ class BaseFieldValidator(ABC):
     def flush(self) -> str | None:
         pass
 
+    def flush_for_save(self) -> str | None:
+        return self.flush()
+
     def _get_var_safe(self, name: str):
         try:
             return self.ui_state.get_var(name)
@@ -216,7 +219,7 @@ class BaseFieldValidator(ABC):
                 if default_val == "":
                     return None
                 return "Value required"
-            return None
+            return "Value required"
 
         try:
             if declared_type is int:
@@ -255,6 +258,18 @@ def flush_and_validate_all() -> list[str]:
         error = v.flush()
         if error is not None:
             invalid.append(f"{v.var_name}: {error}")
+    return invalid
+
+
+def flush_and_validate_for_save(ui_state: BaseUIState) -> list[str]:
+    """Commit pending edits without requiring input/output paths to exist yet."""
+    invalid: list[str] = []
+    for validator in list(_active_validators):
+        if validator.ui_state is not ui_state:
+            continue
+        error = validator.flush_for_save()
+        if error is not None:
+            invalid.append(f"{validator.var_name}: {error}")
     return invalid
 
 

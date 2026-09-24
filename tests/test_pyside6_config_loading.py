@@ -56,6 +56,25 @@ class ConfigLoadingTest(unittest.TestCase):
         self.assertEqual(config.epochs, original_epochs)
         self.assertIn("epochs", controller.last_load_error)
 
+    def test_complete_settings_round_trip_uses_the_controller_config(self):
+        source = TrainConfig.default_values()
+        source.learning_rate = 0.0004
+        source.base_model_name = "custom-model"
+        source.unet.learning_rate = 0.00002
+        source.optimizer.momentum = 0.8
+        source.epochs = 12
+        expected = source.to_settings_dict(secrets=False)
+        current = TrainConfig.default_values()
+        controller = TopBarController(current)
+
+        with tempfile.TemporaryDirectory() as directory:
+            filename = Path(directory) / "complete.json"
+            filename.write_text(json.dumps(expected), encoding="utf-8")
+            loaded = controller.load_config_from_file(str(filename))
+
+        self.assertIs(loaded, current)
+        self.assertEqual(current.to_settings_dict(secrets=False), expected)
+
     def test_qt_view_shows_user_selected_file_error(self):
         config = TrainConfig.default_values()
         controller = _ControllerWithoutPresets(config)

@@ -125,16 +125,19 @@ class PySide6FieldValidator(BaseFieldValidator):
         self._syncing = False
         self._validate_and_style(self.component.text())
 
-    def flush(self) -> str | None:
+    def _flush_with(self, validate: Callable[[str], str | None]) -> str | None:
         self._debounce.stop()
         val = self.component.text()
-        error = self.validate(val)
+        error = validate(val)
         if error is not None:
             self._apply_error()
         else:
             self._clear_error()
             self._commit()
         return error
+
+    def flush(self) -> str | None:
+        return self._flush_with(self.validate)
 
 
 class PySide6PathValidator(PySide6FieldValidator):
@@ -159,6 +162,9 @@ class PySide6PathValidator(PySide6FieldValidator):
         if value == "":
             return None
         return _validate_path_field(self.ui_state, self.io_type, value)
+
+    def flush_for_save(self) -> str | None:
+        return self._flush_with(lambda value: BaseFieldValidator.validate(self, value))
 
     def revalidate(self) -> None:
         if self._bound:
