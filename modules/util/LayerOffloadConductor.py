@@ -656,6 +656,10 @@ class LayerOffloadConductor:
 
         log("to train device")
 
+        if not self.__layers:
+            self.__module_to_device_except_layers(self.__train_device)
+            return
+
         self.__offload_strategy = LayerOffloadStrategy(self.__layers, self.__layer_offload_fraction)
 
         self.__train_device_layer_allocator.allocate_cache(
