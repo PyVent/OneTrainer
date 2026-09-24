@@ -24,6 +24,8 @@ def lr_lambda_linear(
         min_factor: float = 1.0,
 ):
     def lr_lambda(current_step: int):
+        if current_step >= scheduler_steps:
+            return min_factor
         lin_val = max(0.0, float(scheduler_steps - current_step) / float(scheduler_steps))
         factor = apply_min_factor(lin_val, min_factor)
         return factor
@@ -37,6 +39,8 @@ def lr_lambda_cosine(
         min_factor: float = 1.0,
 ):
     def lr_lambda(current_step: int):
+        if current_step >= scheduler_steps:
+            return min_factor
         progress = float(current_step) / float(scheduler_steps)
         cos_val = 0.5 * (1.0 + math.cos(progress * math.pi))
         factor = max(0.0, cos_val)
@@ -52,7 +56,9 @@ def lr_lambda_cosine_with_restarts(
         min_factor: float = 1.0,
 ):
     def lr_lambda(current_step: int):
-        progress = float(min(current_step, scheduler_steps - 1)) / float(scheduler_steps)
+        if current_step >= scheduler_steps:
+            return min_factor
+        progress = float(current_step) / float(scheduler_steps)
         cos_val = 0.5 * (1.0 + math.cos(progress * 2.0 * math.pi * num_cycles))
         factor = max(0.0, cos_val)
         factor = apply_min_factor(factor, min_factor)
@@ -68,7 +74,9 @@ def lr_lambda_cosine_with_hard_restarts(
         min_factor: float = 1.0,
 ):
     def lr_lambda(current_step: int):
-        progress = float(min(current_step, scheduler_steps - 1)) / float(scheduler_steps)
+        if current_step >= scheduler_steps:
+            return min_factor
+        progress = float(current_step) / float(scheduler_steps)
         cos_val = 0.5 * (1.0 + math.cos(((progress * num_cycles) % 1.0) * math.pi))
         factor = max(0.0, cos_val)
         factor = apply_min_factor(factor, min_factor)

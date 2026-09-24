@@ -1,7 +1,12 @@
 import json
 import os.path
+import tempfile
+import threading
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
+
+_json_replace_lock = threading.Lock()
 
 
 def safe_filename(
@@ -30,9 +35,27 @@ def canonical_join(base_path: str, *paths: str):
 
 
 def write_json_atomic(path: str, obj: Any):
-    with open(path + ".write", "w") as f:
-        json.dump(obj, f, indent=4)
-    os.replace(path + ".write", path)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=os.path.dirname(os.path.abspath(path)),
+            prefix=f".{os.path.basename(path)}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary_file:
+            temporary_path = temporary_file.name
+            json.dump(obj, temporary_file, indent=4)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+        # Windows can reject simultaneous replacements of the same destination.
+        with _json_replace_lock:
+            os.replace(temporary_path, path)
+    finally:
+        if temporary_path is not None:
+            with suppress(FileNotFoundError):
+                os.unlink(temporary_path)
 
 
 SUPPORTED_IMAGE_EXTENSIONS = {'.bmp', '.jpg', '.jpeg', '.png', '.tif', '.tiff', '.webp', '.avif'}
