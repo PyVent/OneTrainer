@@ -100,8 +100,8 @@ class TopBarController:
                 secrets_dict = json.load(f)
                 loaded_config.secrets = SecretsConfig.default_values().from_dict(secrets_dict, strict=True)
 
-            self.train_config.from_dict(loaded_config.to_dict())
-            return loaded_config
+            self.train_config.from_dict(loaded_config.to_dict(), strict=True)
+            return self.train_config
         except FileNotFoundError:
             self.last_load_error = f"File not found: {filename}"
             return None

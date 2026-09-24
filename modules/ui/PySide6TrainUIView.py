@@ -30,12 +30,19 @@ from modules.util.enum.ModelType import ModelType
 from modules.util.enum.TrainingMethod import TrainingMethod
 from modules.util.ui import pyside6_components
 from modules.util.ui.pyside6_i18n import (
-    current_language, retranslate_tree, set_language, set_localized_text, translate as tr,
+    current_language,
+    retranslate_tree,
+    set_language,
+    set_localized_text,
+)
+from modules.util.ui.pyside6_i18n import (
+    translate as tr,
 )
 from modules.util.ui.pyside6_navigation import WorkflowNavigation
 from modules.util.ui.pyside6_theme import apply_theme, saved_theme
 from modules.util.ui.pyside6_util import QtABCMeta
 from modules.util.ui.PySide6UIState import PySide6UIState
+from modules.util.ui.validation import flush_and_validate_for_save
 
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QIcon
@@ -178,7 +185,12 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
             )
             event.ignore()
             return
-        self.top_bar_component.save_default()
+        errors = flush_and_validate_for_save(self.ui_state)
+        if errors:
+            QMessageBox.warning(self, tr("Cannot save configuration"), "\n".join(errors))
+            event.ignore()
+            return
+        self.save_default()
         self.controller._stop_always_on_tensorboard()
         self._workspace_dir_var.unsubscribe(self._workspace_dir_subscription_id)
         event.accept()
@@ -666,6 +678,10 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
             tr("JSON Files (*.json);;All Files (*.*)")
         )
         if file_path:
+            errors = flush_and_validate_for_save(self.ui_state)
+            if errors:
+                QMessageBox.warning(self, tr("Cannot save configuration"), "\n".join(errors))
+                return
             self.controller.export_training(file_path)
 
     def generate_debug_package(self):

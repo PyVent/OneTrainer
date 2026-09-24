@@ -14,6 +14,7 @@ class TrainingTabController:
 
     def restore_optimizer_config(self, ui_state):
         optimizer_config = change_optimizer(self.config)
+        self.config.optimizer = optimizer_config
         ui_state.get_var("optimizer").update(optimizer_config)
 
     def get_attention_mechanisms(self) -> list[tuple[str, AttentionMechanism]]:

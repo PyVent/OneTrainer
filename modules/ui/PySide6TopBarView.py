@@ -1,18 +1,27 @@
 from collections.abc import Callable
 
-from PySide6.QtCore import QSignalBlocker, Qt
-from PySide6.QtWidgets import (
-    QFileDialog, QGridLayout, QHBoxLayout, QLabel, QLayout, QMenu,
-    QMessageBox, QPushButton, QSizePolicy, QToolButton, QWidget,
-)
-
 from modules.ui.TopBarController import TopBarController
 from modules.util import path_util
 from modules.util.enum.ModelType import ModelType
 from modules.util.enum.TrainingMethod import TrainingMethod
-from modules.util.optimizer_util import change_optimizer
-from modules.util.ui.pyside6_components import NoScrollComboBox, PAD
+from modules.util.ui.pyside6_components import PAD, NoScrollComboBox
 from modules.util.ui.pyside6_i18n import translate as tr
+from modules.util.ui.validation import flush_and_validate_for_save
+
+from PySide6.QtCore import QSignalBlocker, Qt
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QLayout,
+    QMenu,
+    QMessageBox,
+    QPushButton,
+    QSizePolicy,
+    QToolButton,
+    QWidget,
+)
 
 
 class PySide6TopBarView(QWidget):
@@ -220,19 +229,21 @@ class PySide6TopBarView(QWidget):
                 )
             return
 
-        self.ui_state.update(loaded_config)
-        optimizer_config = change_optimizer(self.controller.train_config)
-        self.ui_state.get_var("optimizer").update(optimizer_config)
+        self.ui_state.update(self.controller.train_config)
         self.load_preset_callback()
 
     def _show_save_dialog(self, initial_dir: str, callback):
         path, _ = QFileDialog.getSaveFileName(self, tr("Save config"), initial_dir, "JSON (*.json)")
         if path:
+            errors = flush_and_validate_for_save(self.ui_state)
+            if errors:
+                QMessageBox.warning(self, tr("Cannot save configuration"), "\n".join(errors))
+                return
             if not path.endswith(".json"):
                 path += ".json"
             try:
                 callback(path)
-            except OSError as exc:
+            except (OSError, ValueError) as exc:
                 QMessageBox.critical(self, tr("Cannot save configuration"), str(exc))
 
     def _show_open_dialog(self, initial_dir: str, callback):

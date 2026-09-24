@@ -9,10 +9,10 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QPushButton
-
 from modules.ui.TopBarController import TopBarController
 from modules.util.config.TrainConfig import TrainConfig
+
+from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QLineEdit, QPushButton
 
 
 class _DeferredThread:
@@ -101,6 +101,97 @@ class QtWorkflowTest(unittest.TestCase):
         exported = Path(export_path).read_text(encoding="utf-8")
         self.assertNotIn("synthetic-private-token", exported)
         self.assertEqual(json.loads(exported)["learning_rate"], 0.0002)
+
+    def test_edits_after_loading_config_are_saved_from_the_shared_state(self):
+        source = TrainConfig.default_values()
+        source.learning_rate = 0.0002
+        source.base_model_name = "initial-model"
+        source.unet.learning_rate = 0.00001
+        loaded_path = Path(self.temp.name) / "loaded.json"
+        loaded_path.write_text(json.dumps(source.to_settings_dict(secrets=False)), encoding="utf-8")
+
+        topbar = self.view.top_bar_component
+        with patch.object(QFileDialog, "getOpenFileName", return_value=(str(loaded_path), "JSON (*.json)")):
+            topbar._load_button.click()
+
+        state = self.view.ui_state
+        state.get_var("learning_rate").set("0.0004")
+        state.get_var("model_type").set("FLUX_DEV_1")
+        state.get_var("base_model_name").set("updated-model")
+        state.get_var("unet.learning_rate").set("0.00002")
+        state.get_var("optimizer.momentum").set("0.7")
+        saved_path = Path(self.temp.name) / "saved.json"
+        with patch.object(QFileDialog, "getSaveFileName", return_value=(str(saved_path), "JSON (*.json)")):
+            topbar._save_button.click()
+
+        saved = json.loads(saved_path.read_text(encoding="utf-8"))
+        self.assertEqual(saved["learning_rate"], 0.0004)
+        self.assertEqual(saved["model_type"], "FLUX_DEV_1")
+        self.assertEqual(saved["base_model_name"], "updated-model")
+        self.assertEqual(saved["unet"]["learning_rate"], 0.00002)
+        self.assertEqual(saved["optimizer"]["momentum"], 0.7)
+
+    def test_save_commits_focused_text_field(self):
+        state = self.view.ui_state
+        entry = next(
+            widget for widget in self.view.findChildren(QLineEdit)
+            if getattr(widget, "_validator", None) is not None
+            and widget._validator.var is state.get_var("learning_rate")
+        )
+        entry.setFocus()
+        entry.setText("0.0007")
+        saved_path = Path(self.temp.name) / "unsent-field.json"
+        with patch.object(QFileDialog, "getSaveFileName", return_value=(str(saved_path), "JSON (*.json)")):
+            self.view.top_bar_component._save_button.click()
+
+        saved = json.loads(saved_path.read_text(encoding="utf-8"))
+        self.assertEqual(saved["learning_rate"], 0.0007)
+
+    def test_export_and_close_commit_pending_text(self):
+        state = self.view.ui_state
+        entry = next(
+            widget for widget in self.view.findChildren(QLineEdit)
+            if getattr(widget, "_validator", None) is not None
+            and widget._validator.var is state.get_var("learning_rate")
+        )
+        entry.setText("0.0008")
+        export_path = Path(self.temp.name) / "export-pending.json"
+        with patch.object(QFileDialog, "getSaveFileName", return_value=(str(export_path), "JSON (*.json)")):
+            self.view.export_button.click()
+        self.assertEqual(json.loads(export_path.read_text(encoding="utf-8"))["learning_rate"], 0.0008)
+
+        entry.setText("0.0009")
+        self.view.close()
+        last_session = Path(self.temp.name) / "training_presets" / "#.json"
+        self.assertEqual(json.loads(last_session.read_text(encoding="utf-8"))["learning_rate"], 0.0009)
+
+    def test_invalid_pending_value_does_not_overwrite_config(self):
+        state = self.view.ui_state
+        entry = next(
+            widget for widget in self.view.findChildren(QLineEdit)
+            if getattr(widget, "_validator", None) is not None
+            and widget._validator.var is state.get_var("learning_rate")
+        )
+        saved_path = Path(self.temp.name) / "protected.json"
+        saved_path.write_text("original", encoding="utf-8")
+        entry.setText("invalid-number")
+        with (
+            patch.object(QFileDialog, "getSaveFileName", return_value=(str(saved_path), "JSON (*.json)")),
+            patch("modules.ui.PySide6TopBarView.QMessageBox.warning") as warning,
+        ):
+            self.view.top_bar_component._save_button.click()
+        self.assertIn("learning_rate", warning.call_args.args[2])
+        self.assertEqual(saved_path.read_text(encoding="utf-8"), "original")
+
+        entry.setText("")
+        with (
+            patch.object(QFileDialog, "getSaveFileName", return_value=(str(saved_path), "JSON (*.json)")),
+            patch("modules.ui.PySide6TopBarView.QMessageBox.warning") as warning,
+        ):
+            self.view.top_bar_component._save_button.click()
+        self.assertIn("learning_rate", warning.call_args.args[2])
+        self.assertEqual(saved_path.read_text(encoding="utf-8"), "original")
+        entry.setText("0.0001")
 
     def test_training_buttons_delegate_sample_backup_save_and_stop(self):
         trainer = Mock()

@@ -20,8 +20,8 @@ from modules.util.callbacks.TrainCallbacks import TrainCallbacks
 from modules.util.commands.TrainCommands import TrainCommands
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.profiling_util import PeakMemoryRecorder
-from modules.util.torch_util import torch_gc
 from modules.util.tensorboard_util import tensorboard_executable
+from modules.util.torch_util import torch_gc
 from modules.util.TrainProgress import TrainProgress
 from modules.util.ui.validation import flush_and_validate_all
 
@@ -337,7 +337,6 @@ class TrainUIController:
     def start_training(self):
         if self.training_thread is None:
             try:
-                self.view.save_default()
                 errors = flush_and_validate_all()
             except Exception as exc:
                 traceback.print_exc()
@@ -345,6 +344,13 @@ class TrainUIController:
                 return
             if errors:
                 self.view.show_validation_errors(errors)
+                return
+
+            try:
+                self.view.save_default()
+            except Exception as exc:
+                traceback.print_exc()
+                self.view.show_validation_errors([f"Could not prepare training: {exc}"])
                 return
 
             if self.train_config.clear_cache_before_training and self.train_config.latent_caching \
