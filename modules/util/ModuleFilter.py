@@ -1,7 +1,11 @@
+from __future__ import annotations
+
 import re
 from re import Pattern
+from typing import TYPE_CHECKING
 
-from modules.util.config.TrainConfig import TrainConfig
+if TYPE_CHECKING:
+    from modules.util.config.TrainConfig import TrainConfig
 
 
 class ModuleFilter:

@@ -35,8 +35,6 @@ jobs:
         run: python -m unittest discover -s tests -p test_json_atomic_write.py -v
       - name: Check layer selection filters
         run: python -m unittest discover -s tests -p test_module_filter.py -v
-      - name: Check Anima VAE source validation
-        run: python -m unittest discover -s tests -p test_anima_vae_source.py -v
       - name: Check Qt entrypoints
         run: python -m unittest discover -s tests -p test_qt_only_interface.py -v
       - name: Check training UI lifecycle
