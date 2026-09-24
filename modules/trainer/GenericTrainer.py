@@ -16,6 +16,7 @@ from modules.modelSaver.BaseModelSaver import BaseModelSaver
 from modules.modelSetup.BaseModelSetup import BaseModelSetup
 from modules.trainer.BaseTrainer import BaseTrainer
 from modules.util import create, huggingface_util, path_util
+from modules.util.backup_util import MARKED_BACKUP_SUFFIX, complete_backup_paths, save_backup
 from modules.util.bf16_stochastic_rounding import set_seed as bf16_stochastic_rounding_set_seed
 from modules.util.callbacks.TrainCallbacks import TrainCallbacks
 from modules.util.commands.TrainCommands import TrainCommands
@@ -185,19 +186,11 @@ class GenericTrainer(BaseTrainer):
 
     def __prune_backups(self, backups_to_keep: int):
         backup_dirpath = os.path.join(self.config.workspace_dir, "backup")
-        if os.path.exists(backup_dirpath):
-            backup_directories = sorted(
-                [dirpath for dirpath in os.listdir(backup_dirpath) if
-                 os.path.isdir(os.path.join(backup_dirpath, dirpath))],
-                reverse=True,
-            )
-
-            for dirpath in backup_directories[backups_to_keep:]:
-                dirpath = os.path.join(backup_dirpath, dirpath)
-                try:
-                    shutil.rmtree(dirpath)
-                except Exception:
-                    tqdm.write(f"Could not delete old rolling backup {dirpath}")
+        for dirpath in complete_backup_paths(backup_dirpath)[max(0, backups_to_keep):]:
+            try:
+                shutil.rmtree(dirpath)
+            except Exception:  # noqa: PERF203
+                tqdm.write(f"Could not delete old rolling backup {dirpath}")
 
         return
 
@@ -437,38 +430,37 @@ class GenericTrainer(BaseTrainer):
 
         self.callbacks.on_update_status("Creating backup")
 
-        backup_name = f"{get_string_timestamp()}-backup-{train_progress.filename_string()}"
-        backup_path = os.path.join(self.config.workspace_dir, "backup", backup_name)
+        backup_name = f"{get_string_timestamp()}-backup-{train_progress.filename_string()}{MARKED_BACKUP_SUFFIX}"
+        backups_path = os.path.join(self.config.workspace_dir, "backup")
+        backup_path = os.path.join(backups_path, backup_name)
 
         # Special case for schedule-free optimizers.
         if self.config.optimizer.optimizer.is_schedule_free:
             torch.clear_autocast_cache()
             self.model.optimizer.eval()
 
+        backup_saved = False
         try:
             if print_msg:
                 tqdm.write("Creating Backup " + backup_path)
 
-            self.model_saver.save(
-                self.model,
-                self.config.model_type,
-                ModelFormat.INTERNAL,
-                backup_path,
-                None,
-            )
+            def write(staging_path: str) -> None:
+                self.model_saver.save(
+                    self.model,
+                    self.config.model_type,
+                    ModelFormat.INTERNAL,
+                    staging_path,
+                    None,
+                )
+                self.__save_backup_config(staging_path)
 
-            self.__save_backup_config(backup_path)
+            save_backup(backups_path, backup_name, write)
+            backup_saved = True
         except Exception:
             traceback.print_exc()
             tqdm.write("Could not save backup. Check your disk space!")
-            try:
-                if os.path.isdir(backup_path):
-                    shutil.rmtree(backup_path)
-            except Exception:
-                traceback.print_exc()
-                tqdm.write("Could not delete partial backup")
         finally:
-            if self.config.rolling_backup:
+            if backup_saved and self.config.rolling_backup:
                 self.__prune_backups(self.config.rolling_backup_count)
 
         self.model_setup.setup_train_device(self.model, self.config)
