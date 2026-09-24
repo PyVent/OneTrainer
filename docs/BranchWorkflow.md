@@ -19,6 +19,12 @@ branches: the pull request itself is the place to test a change before it
 reaches `main`. If several changes must be tested together, use one temporary
 integration branch and delete it after the combined pull request is merged.
 
+When bringing in changes from the original OneTrainer repository, fetch
+`upstream/master` and merge it into a temporary branch created from `main`.
+Open a pull request from that branch and use **Create a merge commit** after
+testing. This keeps the upstream commit history connected, so future updates
+are easier to merge. Delete the temporary branch after the pull request merges.
+
 Repository settings for maintainers:
 
 - Protect `main` with a rule that requires a pull request and the `smoke` check.
