@@ -3,6 +3,8 @@
 *.bak
 *.pyc
 *.swp
+.coverage*
+/htmlcov/
 *~
 debug*.ipynb
 debug*.py

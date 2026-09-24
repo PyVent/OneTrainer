@@ -19,3 +19,7 @@ Before creating a bigger pull request for a new feature, please consider joining
 avoid situations where multiple people work on the same change. It also helps in keeping the changes aligned with the
 general project structure and vision. Please also take a look at the [project structure documentation](ProjectStructure.md).
 For smaller changes or fixes, this is not needed.
+
+## Tests
+
+See [Testing](Testing.md) for the local test commands and the current coverage priorities.
