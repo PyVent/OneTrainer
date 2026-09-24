@@ -25,6 +25,8 @@ jobs:
         run: python -m unittest discover -s tests -p test_config_validation.py -v
       - name: Check backup publication and selection
         run: python -m unittest discover -s tests -p test_backup_util.py -v
+      - name: Check sample path progress
+        run: python -m unittest discover -s tests -p test_sample_path_progress.py -v
       - name: Check Qt entrypoints
         run: python -m unittest discover -s tests -p test_qt_only_interface.py -v
       - name: Check training UI lifecycle
