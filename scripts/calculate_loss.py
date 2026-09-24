@@ -14,7 +14,7 @@ def main():
 
     train_config = TrainConfig.default_values()
     with open(args.config_path, "r") as f:
-        train_config.from_dict(json.load(f))
+        train_config.from_dict(json.load(f), strict=True)
 
     trainer = GenerateLossesModel(train_config, args.output_path)
     trainer.start()

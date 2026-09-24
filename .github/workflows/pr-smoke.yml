@@ -21,6 +21,8 @@ jobs:
           python-version: "3.13"
       - name: Check Python syntax
         run: python -m compileall -q modules scripts
+      - name: Check configuration parsing
+        run: python -m unittest discover -s tests -p test_config_validation.py -v
       - name: Check Qt entrypoints
         run: python -m unittest discover -s tests -p test_qt_only_interface.py -v
       - name: Check training UI lifecycle

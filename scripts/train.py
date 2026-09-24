@@ -21,10 +21,10 @@ def main():
 
     if args.preset_path is not None:
         with open(args.preset_path, "r") as f:
-            train_config.from_dict(json.load(f), migrate=False)
+            train_config.from_dict(json.load(f), migrate=False, strict=True)
 
     with open(args.config_path, "r") as f:
-        train_config.from_dict(json.load(f), migrate=args.preset_path is None)
+        train_config.from_dict(json.load(f), migrate=args.preset_path is None, strict=True)
 
     for config_value in args.config_values or []:
         key, _, value = config_value.partition("=")
@@ -32,14 +32,14 @@ def main():
         target = train_config
         for parent_key in parent_keys:
             target = getattr(target, parent_key)
-        if target.types[leaf_key] is bool:
-            value = value.lower() in ("true", "1", "yes")
-        target.from_dict({leaf_key: value}, migrate=False)
+        if leaf_key not in target.types:
+            raise ValueError(f"Unknown configuration field: {key}")
+        target.from_dict({leaf_key: value}, migrate=False, strict=True)
 
     try:
         with open("secrets.json" if args.secrets_path is None else args.secrets_path, "r") as f:
             secrets_dict=json.load(f)
-            train_config.secrets = SecretsConfig.default_values().from_dict(secrets_dict)
+            train_config.secrets = SecretsConfig.default_values().from_dict(secrets_dict, strict=True)
     except FileNotFoundError:
         if args.secrets_path is not None:
             raise

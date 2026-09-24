@@ -92,11 +92,13 @@ class TopBarController:
                 loaded_dict = json.load(f)
                 default_config = TrainConfig.default_values()
                 # built-in configs are always saved in the most recent version, so migration can be skipped
-                loaded_config = default_config.from_dict(loaded_dict, migrate=not is_built_in_preset).to_unpacked_config()
+                loaded_config = default_config.from_dict(
+                    loaded_dict, migrate=not is_built_in_preset, strict=True,
+                ).to_unpacked_config()
 
             with suppress(FileNotFoundError), open("secrets.json", "r") as f:
                 secrets_dict = json.load(f)
-                loaded_config.secrets = SecretsConfig.default_values().from_dict(secrets_dict)
+                loaded_config.secrets = SecretsConfig.default_values().from_dict(secrets_dict, strict=True)
 
             self.train_config.from_dict(loaded_config.to_dict())
             return loaded_config
