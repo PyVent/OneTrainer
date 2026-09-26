@@ -3,11 +3,11 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QWidget
-
 from modules.util.ui import pyside6_components as ui
-from modules.util.ui.PySide6UIState import PySide6UIState
 from modules.util.ui.pyside6_i18n import current_language, retranslate_tree, set_language
+from modules.util.ui.PySide6UIState import PySide6UIState
+
+from PySide6.QtWidgets import QApplication, QWidget
 
 
 class LocalizedComponentTest(unittest.TestCase):

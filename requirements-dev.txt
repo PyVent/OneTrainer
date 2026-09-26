@@ -3,3 +3,5 @@
 # SEE: https://pre-commit.com/
 pre-commit>=4.0.1
 coverage>=7.0
+# Keep lint results consistent with .pre-commit-config.yaml and CI.
+ruff==0.16.8

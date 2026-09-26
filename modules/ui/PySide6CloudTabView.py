@@ -6,7 +6,6 @@ from modules.util.ui import pyside6_components as ui
 
 from PySide6.QtWidgets import QGroupBox, QWidget
 
-
 # Label, control, config field, tooltip, and (for choices) displayed values.
 # The order here is the order seen in each Cloud section.
 CLOUD_SECTIONS = (

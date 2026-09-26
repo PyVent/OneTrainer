@@ -3,12 +3,12 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QCheckBox, QGridLayout, QLineEdit, QScrollArea
-
 from modules.ui.CloudTabController import CloudTabController
 from modules.ui.PySide6CloudTabView import PySide6CloudTabView
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.ui.PySide6UIState import PySide6UIState
+
+from PySide6.QtWidgets import QApplication, QCheckBox, QGridLayout, QLineEdit, QScrollArea
 
 
 class CloudLayoutTest(unittest.TestCase):

@@ -1,16 +1,16 @@
 import os
+import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import unittest
 from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QApplication
-
 from modules.ui.PySide6TrainUIView import PySide6TrainView
 from modules.util.ui.pyside6_i18n import saved_language, set_language
+
+from PySide6.QtCore import QSettings
+from PySide6.QtWidgets import QApplication
 
 
 class LanguageWorkflowTest(unittest.TestCase):

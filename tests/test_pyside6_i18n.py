@@ -1,22 +1,34 @@
 import os
+import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from modules.util.ui.pyside6_i18n import (
+    current_language,
+    retranslate_tree,
+    saved_language,
+    set_language,
+    set_localized_text,
+    translate,
+)
+from modules.util.ui.pyside6_navigation import WorkflowNavigation
 
 from PySide6.QtCore import QSettings
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QDialog, QGroupBox, QLabel, QLineEdit,
-    QPushButton, QTabWidget, QVBoxLayout, QWidget,
+    QApplication,
+    QComboBox,
+    QDialog,
+    QGroupBox,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
-
-from modules.util.ui.pyside6_i18n import (
-    current_language, retranslate_tree, saved_language, set_language,
-    set_localized_text, translate,
-)
-from modules.util.ui.pyside6_navigation import WorkflowNavigation
 
 
 class LanguageTest(unittest.TestCase):

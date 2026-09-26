@@ -1,14 +1,25 @@
 import os
 
+from modules.ui.PySide6GenerateMasksWindowView import _BatchGenerationThread
+from modules.util.ui.pyside6_i18n import set_localized_text
+from modules.util.ui.pyside6_i18n import translate as tr
+
 from PySide6.QtCore import Signal, Slot
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
-    QHBoxLayout, QLabel, QLineEdit, QMessageBox, QProgressBar, QPushButton,
-    QVBoxLayout, QWidget,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QFileDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
-
-from modules.ui.PySide6GenerateMasksWindowView import _BatchGenerationThread
-from modules.util.ui.pyside6_i18n import set_localized_text, translate as tr
 
 
 class PySide6GenerateCaptionsWindowView(QDialog):
@@ -93,15 +104,15 @@ class PySide6GenerateCaptionsWindowView(QDialog):
         if not os.path.isdir(self.path.text()):
             QMessageBox.warning(self, tr("Invalid folder"), tr("Choose an existing image folder."))
             return
-        options = dict(
-            model_name=self.model.currentText(),
-            path=self.path.text(),
-            initial_caption=self.initial_caption.text(),
-            caption_prefix=self.caption_prefix.text(),
-            caption_postfix=self.caption_postfix.text(),
-            mode_str=self.mode.currentData(),
-            include_subdirectories=self.include_subdirectories.isChecked(),
-        )
+        options = {
+            "model_name": self.model.currentText(),
+            "path": self.path.text(),
+            "initial_caption": self.initial_caption.text(),
+            "caption_prefix": self.caption_prefix.text(),
+            "caption_postfix": self.caption_postfix.text(),
+            "mode_str": self.mode.currentData(),
+            "include_subdirectories": self.include_subdirectories.isChecked(),
+        }
         self._running = True
         self.create_button.setEnabled(False)
         self._worker = _BatchGenerationThread(self.controller.create_captions, options, self)

@@ -3,9 +3,9 @@ from modules.ui.ConceptTabController import ConceptTabController
 from modules.ui.PySide6ConceptWindowView import PySide6ConceptWindowView
 from modules.ui.PySide6ConfigListView import PySide6ConfigListView
 from modules.util.ui import pyside6_components
+from modules.util.ui.pyside6_i18n import translate as tr
 from modules.util.ui.PySide6UIState import PySide6UIState
 from modules.util.ui.QtVar import QtVar
-from modules.util.ui.pyside6_i18n import translate as tr
 
 from PIL.ImageQt import ImageQt
 from PySide6.QtCore import QEvent, QObject, QSignalBlocker, Qt, QTimer

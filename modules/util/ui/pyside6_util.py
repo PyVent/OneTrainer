@@ -3,11 +3,11 @@ import signal
 import sys
 from abc import ABCMeta
 
+from modules.util.ui.pyside6_i18n import install_i18n
+from modules.util.ui.pyside6_theme import apply_theme, saved_theme
+
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QStyleFactory, QWidget
-
-from modules.util.ui.pyside6_theme import apply_theme, saved_theme
-from modules.util.ui.pyside6_i18n import install_i18n
 
 
 class QtABCMeta(type(QWidget), ABCMeta):

@@ -3,8 +3,9 @@ import traceback
 from modules.ui.BaseConvertModelUIView import BaseConvertModelUIView
 from modules.ui.ConvertModelUIController import ConvertModelUIController
 from modules.util.ui import pyside6_components
+from modules.util.ui.pyside6_i18n import set_localized_text
+from modules.util.ui.pyside6_i18n import translate as tr
 from modules.util.ui.PySide6UIState import PySide6UIState
-from modules.util.ui.pyside6_i18n import set_localized_text, translate as tr
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from PySide6.QtWidgets import QDialog, QGridLayout, QLabel, QLayout, QWidget
@@ -56,9 +57,6 @@ class PySide6ConvertModelUIView(BaseConvertModelUIView, QDialog):
 
         self.build_content(self._frame, controller, self.ui_state, self._rebuild_dynamic_ui)
         self.button.setObjectName("primaryAction")
-        training_method_label = self._layout.itemAtPosition(1, 0).widget()
-        if isinstance(training_method_label, QLabel):
-            training_method_label.setText("Training Method")
         self._rebuild_dynamic_ui()
         self._layout.setRowStretch(self._layout.rowCount(), 1)
 

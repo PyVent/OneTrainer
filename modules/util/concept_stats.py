@@ -151,10 +151,7 @@ def folder_scan(dir, stats_dict : dict, advanced_checks : bool, conceptconfig : 
             stats_dict["video_count"] += 1
             stats_dict["file_size"] += path.stat().st_size
             if advanced_checks:
-                #check if video has a corresponding mask/caption in the same directory
-                # if (basename + "-masklabel.png") in file_list_str:
-                #     stats_dict["paired_masks"] += 1
-                #     stats_dict["video_with_mask_count"] += 1
+                # Check for a corresponding caption in the same directory.
                 if (basename + ".txt") in file_list_str:
                     stats_dict["paired_captions"] += 1
                     stats_dict["video_with_caption_count"] += 1

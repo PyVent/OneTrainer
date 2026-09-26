@@ -11,9 +11,9 @@ from modules.util import create
 from modules.util.callbacks.TrainCallbacks import TrainCallbacks
 from modules.util.commands.TrainCommands import TrainCommands
 from modules.util.config.TrainConfig import TrainConfig
+from modules.util.tensorboard_util import tensorboard_executable
 from modules.util.TimedActionMixin import TimedActionMixin
 from modules.util.TrainProgress import TrainProgress
-from modules.util.tensorboard_util import tensorboard_executable
 
 import torch
 

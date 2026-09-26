@@ -4,12 +4,12 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QCheckBox, QLabel, QLineEdit, QPushButton, QWidget
-
 from modules.ui.AdditionalEmbeddingsTabController import AdditionalEmbeddingsTabController
 from modules.ui.PySide6AdditionalEmbeddingsTabView import PySide6AdditionalEmbeddingsTabView
 from modules.util.config.TrainConfig import TrainConfig, TrainEmbeddingConfig
 from modules.util.ui.PySide6UIState import PySide6UIState
+
+from PySide6.QtWidgets import QApplication, QCheckBox, QLabel, QLineEdit, QPushButton, QWidget
 
 
 class AdditionalEmbeddingsLayoutTest(unittest.TestCase):

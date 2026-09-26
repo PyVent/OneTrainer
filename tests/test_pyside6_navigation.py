@@ -3,9 +3,9 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication
-
 from modules.util.ui.pyside6_navigation import WorkflowNavigation
+
+from PySide6.QtWidgets import QApplication
 
 
 class WorkflowNavigationTest(unittest.TestCase):

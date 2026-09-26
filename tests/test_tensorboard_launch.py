@@ -16,11 +16,13 @@ class TensorBoardExecutableTest(unittest.TestCase):
                 self.assertEqual(tensorboard_executable(), str(executable))
 
     def test_missing_console_script_has_actionable_error(self):
-        with tempfile.TemporaryDirectory() as directory:
-            with patch("modules.util.tensorboard_util.sysconfig.get_path", return_value=directory), \
-                    patch("modules.util.tensorboard_util.sys.platform", "win32"):
-                with self.assertRaisesRegex(FileNotFoundError, "requirements-global.txt"):
-                    tensorboard_executable()
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch("modules.util.tensorboard_util.sysconfig.get_path", return_value=directory),
+            patch("modules.util.tensorboard_util.sys.platform", "win32"),
+            self.assertRaisesRegex(FileNotFoundError, "requirements-global.txt"),
+        ):
+            tensorboard_executable()
 
 
 if __name__ == "__main__":

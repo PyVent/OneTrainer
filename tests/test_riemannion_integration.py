@@ -1,9 +1,6 @@
 import unittest
 from types import SimpleNamespace
 
-import torch
-from torch import nn
-
 from modules.module.LoRAModule import LoRAModule, LoRAModuleWrapper
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.enum.Optimizer import Optimizer
@@ -12,6 +9,9 @@ from modules.util.optimizer.riemannion_util import (
     build_riemannion_pair_map,
     create_riemannion_optimizer,
 )
+
+import torch
+from torch import nn
 
 
 def make_model_and_groups():
@@ -98,7 +98,7 @@ class RiemannionIntegrationTest(unittest.TestCase):
             param.grad = torch.ones_like(param)
         resumed.step()
         self.assertTrue(all(torch.isfinite(p).all() for p in groups.parameters()))
-        self.assertTrue(all(not torch.equal(old, new) for old, new in zip(before, groups.parameters())))
+        self.assertTrue(all(not torch.equal(old, new) for old, new in zip(before, groups.parameters(), strict=True)))
 
 
 if __name__ == "__main__":

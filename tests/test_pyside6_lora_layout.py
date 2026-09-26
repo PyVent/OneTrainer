@@ -4,12 +4,12 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QLineEdit
-
 from modules.ui.LoraTabController import LoraTabController
 from modules.ui.PySide6LoraTabView import PySide6LoraTabView
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.ui.PySide6UIState import PySide6UIState
+
+from PySide6.QtWidgets import QApplication, QLineEdit
 
 
 class LoraLayoutTest(unittest.TestCase):

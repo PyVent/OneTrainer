@@ -5,12 +5,12 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QCoreApplication, QEvent
-from PySide6.QtWidgets import QApplication, QCheckBox, QGridLayout, QGroupBox, QLineEdit, QPushButton
-
 from modules.ui.PySide6TrainUIView import PySide6TrainView
 from modules.util.enum.TrainingMethod import TrainingMethod
 from modules.util.ui.validation import _active_validators
+
+from PySide6.QtCore import QCoreApplication, QEvent
+from PySide6.QtWidgets import QApplication, QCheckBox, QGridLayout, QGroupBox, QLineEdit, QPushButton
 
 
 class DataAndBackupLayoutTest(unittest.TestCase):

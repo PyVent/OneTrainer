@@ -1,8 +1,8 @@
 from modules.util import path_util
 from modules.util.enum.DataType import DataType
-from modules.util.enum.ModelType import ModelType
 from modules.util.enum.PathIOType import PathIOType
 from modules.util.enum.TrainingMethod import TrainingMethod
+from modules.util.model_catalog import MODEL_TYPE_CHOICES
 
 
 class BaseConvertModelUIView:
@@ -13,35 +13,12 @@ class BaseConvertModelUIView:
         # model type
         self.components.label(frame, 0, 0, "Model Type",
                          tooltip="Type of the model")
-        self.components.options_kv(frame, 0, 1, [ #TODO simplify
-            ("Stable Diffusion 1.5", ModelType.STABLE_DIFFUSION_15),
-            ("Stable Diffusion 1.5 Inpainting", ModelType.STABLE_DIFFUSION_15_INPAINTING),
-            ("Stable Diffusion 2.0", ModelType.STABLE_DIFFUSION_20),
-            ("Stable Diffusion 2.0 Inpainting", ModelType.STABLE_DIFFUSION_20_INPAINTING),
-            ("Stable Diffusion 2.1", ModelType.STABLE_DIFFUSION_21),
-            ("Stable Diffusion 3", ModelType.STABLE_DIFFUSION_3),
-            ("Stable Diffusion 3.5", ModelType.STABLE_DIFFUSION_35),
-            ("Stable Diffusion XL 1.0 Base", ModelType.STABLE_DIFFUSION_XL_10_BASE),
-            ("Stable Diffusion XL 1.0 Base Inpainting", ModelType.STABLE_DIFFUSION_XL_10_BASE_INPAINTING),
-            ("Wuerstchen v2", ModelType.WUERSTCHEN_2),
-            ("Stable Cascade", ModelType.STABLE_CASCADE_1),
-            ("PixArt Alpha", ModelType.PIXART_ALPHA),
-            ("PixArt Sigma", ModelType.PIXART_SIGMA),
-            ("Flux Dev", ModelType.FLUX_DEV_1),
-            ("Flux Fill Dev", ModelType.FLUX_FILL_DEV_1),
-            ("Flux 2", ModelType.FLUX_2),
-            ("Hunyuan Video", ModelType.HUNYUAN_VIDEO),
-            ("Chroma1", ModelType.CHROMA_1), #TODO does this just work? HiDream is not here
-            ("QwenImage", ModelType.QWEN), #TODO does this just work? HiDream is not here
-            ("Anima", ModelType.ANIMA),
-            ("Anima (qwen 2.1 vae)", ModelType.ANIMA_QWEN21_VAE),
-            ("Krea 2", ModelType.KREA_2),
-            ("ZImage", ModelType.Z_IMAGE),
-            ("Ideogram 4", ModelType.IDEOGRAM_4),
-        ], ui_state, "model_type", command=on_model_or_method_change)
+        self.components.options_kv(
+            frame, 0, 1, list(MODEL_TYPE_CHOICES), ui_state, "model_type", command=on_model_or_method_change,
+        )
 
         # training method
-        self.components.label(frame, 1, 0, "Model Type",
+        self.components.label(frame, 1, 0, "Training Method",
                          tooltip="The type of model to convert")
         self.components.options_kv(frame, 1, 1, [
             ("Base Model", TrainingMethod.FINE_TUNE),

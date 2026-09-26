@@ -335,7 +335,6 @@ class BaseConceptWindowView:
 
         #video count
         self.components.set_label_text(self.video_count_preview, controller.concept.concept_stats["video_count"])
-        #self.components.set_label_text(self.video_count_mask_preview, controller.concept.concept_stats["video_with_mask_count"])
         self.components.set_label_text(self.video_count_caption_preview, controller.concept.concept_stats["video_with_caption_count"])
 
         #mask count

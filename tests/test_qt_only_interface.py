@@ -1,9 +1,8 @@
 """Keep the supported UI entrypoints and production modules on Qt."""
 
 import ast
-from pathlib import Path
 import unittest
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 LEGACY_GUI_PACKAGES = {"tkinter", "customtkinter"}
@@ -25,9 +24,11 @@ class QtOnlyInterfaceTest(unittest.TestCase):
         offenders = []
         for folder in (ROOT / "modules", ROOT / "scripts"):
             for path in folder.rglob("*.py"):
-                for module in imported_modules(path):
-                    if module.split(".", 1)[0] in LEGACY_GUI_PACKAGES:
-                        offenders.append(f"{path.relative_to(ROOT)}: {module}")
+                offenders.extend(
+                    f"{path.relative_to(ROOT)}: {module}"
+                    for module in imported_modules(path)
+                    if module.split(".", 1)[0] in LEGACY_GUI_PACKAGES
+                )
         self.assertEqual(offenders, [])
 
     def test_entrypoints_launch_qt(self):

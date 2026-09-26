@@ -195,12 +195,6 @@ def vb_losses(
         predicted_eps: Tensor,
         predicted_var_values: Tensor,
 ) -> Tensor:
-    # convert to float64 for increased precision and to prevent nan results
-    # x_0 = x_0.to(dtype=torch.float64)
-    # x_t = x_t.to(dtype=torch.float64)
-    # predicted_eps = predicted_eps.to(dtype=torch.float64)
-    # predicted_var_values = predicted_var_values.to(dtype=torch.float64)
-
     # Learn the variance using the variational bound, but don't let it affect our mean prediction.
     return __vb_terms_bpd(
         coefficients=coefficients,

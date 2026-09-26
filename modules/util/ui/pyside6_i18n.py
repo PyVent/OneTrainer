@@ -4,20 +4,28 @@ The English text in widget constructors is the source language.  Translations
 only affect presentation: config values and editable user text stay untouched.
 """
 
+import re
 from functools import lru_cache
 from html import escape, unescape
 from importlib import import_module
-import re
 from string import Formatter
 
 from PySide6.QtCore import QEvent, QLibraryInfo, QObject, QSettings, QSignalBlocker, QTimer, QTranslator
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
-    QApplication, QAbstractButton, QComboBox, QGroupBox, QLabel, QLineEdit,
-    QMenu, QPlainTextEdit, QTabWidget, QTextEdit, QWidget,
+    QAbstractButton,
+    QApplication,
+    QComboBox,
+    QGroupBox,
+    QLabel,
+    QLineEdit,
+    QMenu,
+    QPlainTextEdit,
+    QTabWidget,
+    QTextEdit,
+    QWidget,
 )
 from shiboken6 import isValid
-
 
 LANGUAGES = ("ru", "en")
 _SETTING = "appearance/language"

@@ -95,82 +95,114 @@ def init_manifold_(wA, wB, init_scale=1e-6, generator=None):
 
 @torch.no_grad()
 def _set_lora_factors_(wA, wB, left=None, right=None):
-    wA.zero_(); wB.zero_()
-    if left is not None: wB[:, :left.shape[1]].copy_(left.to(wB.device, wB.dtype))
-    if right is not None: wA[:right.shape[1]].copy_(right.T.to(wA.device, wA.dtype))
+    wA.zero_()
+    wB.zero_()
+    if left is not None:
+        wB[:, : left.shape[1]].copy_(left.to(wB.device, wB.dtype))
+    if right is not None:
+        wA[: right.shape[1]].copy_(right.T.to(wA.device, wA.dtype))
 
 
-def loi_initialize_peft(model, backward, *, adapter="default", oversampling=None,
-                        power_iterations=1, alpha=None, seed=None, verbose=True):
+def loi_initialize_peft(
+    model, backward, *, adapter="default", oversampling=None, power_iterations=1, alpha=None, seed=None, verbose=True
+):
     """Algorithm 3 LOI (BackPropRSVD + Theorem 5.1); backward - колбэк loss.backward().
 
     Вся линейная алгебра (omega/Y/Z, QR, SVD) живёт на CPU в fp32: матрицы узкие
     (n x ~3r), CPU-фактаризации мгновенны, а VRAM занимает только сам backward -
     пик по памяти совпадает с обычным шагом обучения."""
     pairs = list(_iter_lora_pairs(model, adapter, require_grad=True))
-    if not pairs or not callable(backward): raise ValueError("LOI needs LoRA pairs and a backward callback")
-    if power_iterations < 0: raise ValueError("power_iterations must be non-negative")
+    if not pairs or not callable(backward):
+        raise ValueError("LOI needs LoRA pairs and a backward callback")
+    if power_iterations < 0:
+        raise ValueError("power_iterations must be non-negative")
     for name, a, b, scale in pairs:
         r = a.shape[0]
-        if a.ndim != 2 or b.ndim != 2 or b.shape[1] != r or min(a.shape[1], b.shape[0]) < 2*r or not scale:
+        if a.ndim != 2 or b.ndim != 2 or b.shape[1] != r or min(a.shape[1], b.shape[0]) < 2 * r or not scale:
             raise ValueError(f"invalid LOI LoRA pair: {name}")
     # копии для отката - на CPU, чтобы не удваивать LoRA-веса в VRAM
     saved = [(a.detach().clone().cpu(), b.detach().clone().cpu()) for _, a, b, _ in pairs]
-    def clear(): model.zero_grad(set_to_none=True)
+
+    def clear():
+        model.zero_grad(set_to_none=True)
+
     try:
         omega = {}
         for name, a, b, _ in pairs:
-            r, n = a.shape; p = r if oversampling is None else oversampling; gen = None
+            r, n = a.shape
+            p = r if oversampling is None else oversampling
+            gen = None
             if seed is not None:
-                gen = torch.Generator(); gen.manual_seed(seed + sum(name.encode()))
-            omega[name] = torch.randn(n, min(n, b.shape[0], 2*r+p), dtype=torch.float32, generator=gen)
+                gen = torch.Generator()
+                gen.manual_seed(seed + sum(name.encode()))
+            omega[name] = torch.randn(n, min(n, b.shape[0], 2 * r + p), dtype=torch.float32, generator=gen)
+
         def mul(vecs, side):
-            out = {name: [] for name, *_ in pairs}; width = min(a.shape[0] for _, a, _, _ in pairs)
+            out = {name: [] for name, *_ in pairs}
+            width = min(a.shape[0] for _, a, _, _ in pairs)
             n_passes = math.ceil(max(v.shape[1] for v in vecs.values()) / width) if vecs else 1
             pass_idx = 1
             for start in range(0, max(v.shape[1] for v in vecs.values()), width):
                 if verbose:
                     print(f"  -> Gradient pass {pass_idx}/{n_passes}...")
                 pass_idx += 1
-                active = {name: v[:, start:start+width] for name, v in vecs.items() if start < v.shape[1]}
+                active = {name: v[:, start : start + width] for name, v in vecs.items() if start < v.shape[1]}
                 clear()
                 for name, a, b, _ in pairs:
-                    x = active.get(name); _set_lora_factors_(a, b, x if side == "left" else None, x if side == "right" else None)
+                    x = active.get(name)
+                    _set_lora_factors_(a, b, x if side == "left" else None, x if side == "right" else None)
                 backward()
                 for name, a, b, scale in pairs:
                     x = active.get(name)
-                    if x is None: continue
+                    if x is None:
+                        continue
                     g = b.grad if side == "right" else a.grad
-                    if g is None: raise RuntimeError(
-                        f"LOI: нет градиента для {name} - слой не участвовал в forward. "
-                        "Для vision/projector-слоёв LOI-примеры должны содержать картинки.")
-                    z = g[:, :x.shape[1]] if side == "right" else g[:x.shape[1]].T
+                    if g is None:
+                        raise RuntimeError(
+                            f"LOI: нет градиента для {name} - слой не участвовал в forward. "
+                            "Для vision/projector-слоёв LOI-примеры должны содержать картинки."
+                        )
+                    z = g[:, : x.shape[1]] if side == "right" else g[: x.shape[1]].T
                     out[name].append(z.detach().float().div(float(scale)).cpu())
                 clear()
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()  # батчи переменной формы фрагментируют аллокатор
             return {name: torch.cat(xs, 1) for name, xs in out.items()}
-        if verbose: print("LOI: Initial right pass...")
+
+        if verbose:
+            print("LOI: Initial right pass...")
         Y = {name: _qr(x)[0] for name, x in mul(omega, "right").items()}
         for i in range(power_iterations):
-            if verbose: print(f"LOI: Power iteration {i+1}/{power_iterations} (left)...")
+            if verbose:
+                print(f"LOI: Power iteration {i + 1}/{power_iterations} (left)...")
             Z = {name: _qr(x)[0] for name, x in mul(Y, "left").items()}
-            if verbose: print(f"LOI: Power iteration {i+1}/{power_iterations} (right)...")
+            if verbose:
+                print(f"LOI: Power iteration {i + 1}/{power_iterations} (right)...")
             Y = {name: _qr(x)[0] for name, x in mul(Z, "right").items()}
-        if verbose: print("LOI: Final left pass and SVD projection...")
+        if verbose:
+            print("LOI: Final left pass and SVD projection...")
         GTY = mul(Y, "left")
         for name, a, b, scaling in pairs:
-            r = a.shape[0]; uh, _, vh = torch.linalg.svd(GTY[name].T, full_matrices=False)
-            U, V = Y[name] @ uh[:, :2*r], vh[:2*r].T
+            r = a.shape[0]
+            uh, _, vh = torch.linalg.svd(GTY[name].T, full_matrices=False)
+            U, V = Y[name] @ uh[:, : 2 * r], vh[: 2 * r].T
             value = (-0.01 / math.sqrt(r) if alpha is None else float(alpha)) / float(scaling)
-            s = math.sqrt(abs(value)); _set_lora_factors_(a, b, U[:, :r]*s, V[:, r:2*r]*math.copysign(s, value))
+            s = math.sqrt(abs(value))
+            _set_lora_factors_(a, b, U[:, :r] * s, V[:, r : 2 * r] * math.copysign(s, value))
     except Exception:
-        for (_, a, b, _), (old_a, old_b) in zip(pairs, saved): a.data.copy_(old_a); b.data.copy_(old_b)
-        clear(); raise
+        for (_, a, b, _), (old_a, old_b) in zip(pairs, saved, strict=True):
+            a.data.copy_(old_a)
+            b.data.copy_(old_b)
+        clear()
+        raise
     clear()
     if verbose:
-        r = pairs[0][1].shape[0]; p = r if oversampling is None else oversampling
-        print(f"Riemannion LOI: {len(pairs)} pairs, p={p}, q={power_iterations}, alpha={(-0.01/math.sqrt(r) if alpha is None else alpha):.6g}; {2*(power_iterations+1)*math.ceil((2*r+p)/r)} backward passes")
+        r = pairs[0][1].shape[0]
+        p = r if oversampling is None else oversampling
+        print(
+            f"Riemannion LOI: {len(pairs)} pairs, p={p}, q={power_iterations}, alpha={(-0.01 / math.sqrt(r) if alpha is None else alpha):.6g}; {2 * (power_iterations + 1) * math.ceil((2 * r + p) / r)} backward passes"
+        )
+
 
 class Riemannion(Optimizer):
     """Риманов Muon на многообразии матриц ранга r для LoRA-пар (A, B).
@@ -186,9 +218,15 @@ class Riemannion(Optimizer):
             raise ValueError(f"lr должен быть > 0, получен {lr}")
         if not 0.0 <= momentum < 1.0:
             raise ValueError(f"momentum должен быть в [0, 1), получен {momentum}")
-        defaults = dict(lr=lr, momentum=momentum, weight_decay=weight_decay,
-                        sigma_floor=sigma_floor, adam_betas=adam_betas,
-                        adam_eps=adam_eps, lora_pair=False)
+        defaults = {
+            "lr": lr,
+            "momentum": momentum,
+            "weight_decay": weight_decay,
+            "sigma_floor": sigma_floor,
+            "adam_betas": adam_betas,
+            "adam_eps": adam_eps,
+            "lora_pair": False,
+        }
         super().__init__(params, defaults)
 
     @torch.no_grad()
@@ -261,7 +299,7 @@ class Riemannion(Optimizer):
         P1, S1, Q1h = torch.linalg.svd(K)
         Q1 = Q1h.T
         # численно нулевые сингулярные направления не поднимаем до 1 - это шум
-        mask = (S1 > S1[0] * 1e-7).float() if float(S1[0]) > 0 else torch.zeros_like(S1)
+        mask = (S1[0] * 1e-7 < S1).float() if float(S1[0]) > 0 else torch.zeros_like(S1)
         P1m = P1 * mask
         # проекция Ortho(M) обратно на касательное пространство, в компонентах:
         Cd = P1m[:r] @ Q1[:r].T                   # U^T D V
@@ -334,7 +372,7 @@ def _iter_lora_pairs(model, adapter="default", require_grad=True):
         lB = getattr(mod, "lora_B", None)
         if lA is None or lB is None or not hasattr(lA, "keys"):
             continue
-        if adapter not in lA.keys() or adapter not in lB.keys():
+        if adapter not in lA or adapter not in lB:
             continue
         wA, wB = lA[adapter].weight, lB[adapter].weight
         if require_grad and not (wA.requires_grad and wB.requires_grad):

@@ -5,14 +5,14 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QPoint
-from PySide6.QtWidgets import QApplication, QFileDialog, QLineEdit, QPushButton, QWidget
-
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.ui import pyside6_components as components
+from modules.util.ui.pyside6_theme import apply_theme
 from modules.util.ui.PySide6UIState import PySide6UIState
 from modules.util.ui.QtVar import QtVar
-from modules.util.ui.pyside6_theme import apply_theme
+
+from PySide6.QtCore import QPoint
+from PySide6.QtWidgets import QApplication, QFileDialog, QLineEdit, QPushButton, QWidget
 
 
 class _ChoiceState:

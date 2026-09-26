@@ -107,7 +107,7 @@ class PySide6SampleWidgetView(BaseSampleWidgetView, QWidget, metaclass=QtABCMeta
             layout.removeWidget(field)
         for column in range(12):
             layout.setColumnStretch(column, 1 if column == stretch_column else 0)
-        for field, (row, column, row_span, column_span) in zip(self._fields, positions):
+        for field, (row, column, row_span, column_span) in zip(self._fields, positions, strict=True):
             layout.addWidget(field, row, column, row_span, column_span)
         self._layout_mode = mode
 

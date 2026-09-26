@@ -3,7 +3,8 @@ from abc import ABC
 
 from modules.ui.BaseConfigListView import BaseConfigListView
 from modules.util.ui import pyside6_components
-from modules.util.ui.pyside6_i18n import set_localized_text, translate as tr
+from modules.util.ui.pyside6_i18n import set_localized_text
+from modules.util.ui.pyside6_i18n import translate as tr
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QInputDialog, QLabel, QWidget

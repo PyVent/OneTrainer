@@ -61,7 +61,6 @@ class ZImageSampler(BaseModelSampler):
 
             vae_scale_factor = 8
             num_latent_channels = transformer.in_channels
-            #patch_size = 2
 
             # prepare prompt
             self.model.materialize_only("text_encoder")

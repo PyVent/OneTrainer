@@ -1,13 +1,26 @@
 import os
 
+from modules.util.ui.pyside6_i18n import set_localized_text
+from modules.util.ui.pyside6_i18n import translate as tr
+
 from PySide6.QtCore import QThread, Signal, Slot
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog,
-    QFormLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QProgressBar,
-    QPushButton, QSpinBox, QVBoxLayout, QWidget,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDoubleSpinBox,
+    QFileDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
 )
-
-from modules.util.ui.pyside6_i18n import set_localized_text, translate as tr
 
 
 class _BatchGenerationThread(QThread):
@@ -126,17 +139,17 @@ class PySide6GenerateMasksWindowView(QDialog):
         if not os.path.isdir(self.path.text()):
             QMessageBox.warning(self, tr("Invalid folder"), tr("Choose an existing image folder."))
             return
-        options = dict(
-            model_name=self.model.currentText(),
-            path=self.path.text(),
-            prompt=self.prompt.text(),
-            mode_str=self.mode.currentData(),
-            alpha_str=str(self.alpha.value()),
-            threshold_str=str(self.threshold.value()),
-            smooth_str=str(self.smooth.value()),
-            expand_str=str(self.expand.value()),
-            include_subdirectories=self.include_subdirectories.isChecked(),
-        )
+        options = {
+            "model_name": self.model.currentText(),
+            "path": self.path.text(),
+            "prompt": self.prompt.text(),
+            "mode_str": self.mode.currentData(),
+            "alpha_str": str(self.alpha.value()),
+            "threshold_str": str(self.threshold.value()),
+            "smooth_str": str(self.smooth.value()),
+            "expand_str": str(self.expand.value()),
+            "include_subdirectories": self.include_subdirectories.isChecked(),
+        }
         self._running = True
         self.create_button.setEnabled(False)
         self._worker = _BatchGenerationThread(self.controller.create_masks, options, self)

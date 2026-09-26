@@ -189,9 +189,7 @@ class PixArtAlphaModel(BaseModel):
     ) -> tuple[Tensor, Tensor]:
         if tokens is None and text is not None:
             max_token_length = 120
-            # deactivated for performance reasons. most people don't need 300 tokens
-            # if self.model_type.is_pixart_sigma():
-            #     max_token_length = 300
+            # Use 120 tokens for both variants to keep text encoding costs bounded.
 
             tokenizer_output = self.tokenizer(
                 self.add_text_encoder_embeddings_to_prompt(text),

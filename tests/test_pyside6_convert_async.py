@@ -8,11 +8,15 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication
-
 from modules.ui.ConvertModelUIController import ConvertModelUIController
 from modules.ui.PySide6ConvertModelUIView import PySide6ConvertModelUIView
+from modules.ui.TopBarController import TopBarController
+from modules.util import create
+from modules.util.config.TrainConfig import TrainConfig
+from modules.util.enum.TrainingMethod import TrainingMethod
+
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication
 
 
 class _SyntheticController(ConvertModelUIController):
@@ -37,6 +41,23 @@ class ConvertAsyncTest(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
+    def test_conversion_and_training_offer_the_same_loadable_models(self):
+        controller = ConvertModelUIController()
+        controller.convert_model_args.training_method = TrainingMethod.FINE_TUNE
+        window = controller.create_window(None, PySide6ConvertModelUIView)
+        self.addCleanup(window.close)
+        combo = window._layout.itemAtPosition(0, 1).widget()
+        models = [model for _, model in TopBarController(TrainConfig.default_values()).get_model_types()]
+        self.assertEqual([combo.itemData(i) for i in range(combo.count())], [str(model) for model in models])
+        for index, model_type in enumerate(models):
+            with self.subTest(model=model_type):
+                combo.setCurrentIndex(index)
+                self.app.processEvents()
+                self.assertEqual(controller.convert_model_args.model_type, model_type)
+                self.assertTrue(controller.get_output_formats())
+                self.assertIsNotNone(create.create_model_loader(model_type, TrainingMethod.FINE_TUNE))
+                self.assertIsNotNone(create.create_model_saver(model_type, TrainingMethod.FINE_TUNE))
+
     def _wait_for(self, predicate):
         deadline = time.monotonic() + 4
         while not predicate() and time.monotonic() < deadline:
@@ -52,10 +73,12 @@ class ConvertAsyncTest(unittest.TestCase):
                 raise AssertionError("Worker touched a GUI view")
 
         controller.view = View()
-        with patch("modules.ui.ConvertModelUIController.create.create_model_loader", side_effect=ValueError("synthetic load error")), \
-                patch("modules.ui.ConvertModelUIController.torch_gc") as cleanup:
-            with self.assertRaisesRegex(ValueError, "synthetic load error"):
-                controller.perform_conversion()
+        with (
+            patch("modules.ui.ConvertModelUIController.create.create_model_loader", side_effect=ValueError("synthetic load error")),
+            patch("modules.ui.ConvertModelUIController.torch_gc") as cleanup,
+            self.assertRaisesRegex(ValueError, "synthetic load error"),
+        ):
+            controller.perform_conversion()
         cleanup.assert_called_once_with()
 
     def test_convert_stays_responsive_and_recovers_after_error(self):

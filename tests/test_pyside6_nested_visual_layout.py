@@ -6,11 +6,6 @@ from unittest.mock import Mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from matplotlib.colors import to_rgba
-from PIL import Image
-from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QApplication, QTabWidget
-
 from modules.ui.ConceptWindowController import ConceptWindowController
 from modules.ui.PySide6ConceptWindowView import PySide6ConceptWindowView
 from modules.ui.PySide6TimestepDistributionWindowView import PySide6TimestepDistributionWindowView
@@ -18,9 +13,14 @@ from modules.ui.TimestepDistributionWindowController import TimestepDistribution
 from modules.util.concept_stats import init_concept_stats
 from modules.util.config.ConceptConfig import ConceptConfig
 from modules.util.config.TrainConfig import TrainConfig
-from modules.util.ui.PySide6UIState import PySide6UIState
 from modules.util.ui.pyside6_i18n import current_language, set_language
 from modules.util.ui.pyside6_theme import apply_theme
+from modules.util.ui.PySide6UIState import PySide6UIState
+
+from matplotlib.colors import to_rgba
+from PIL import Image
+from PySide6.QtGui import QPalette
+from PySide6.QtWidgets import QApplication, QTabWidget
 
 
 class NestedVisualLayoutTest(unittest.TestCase):
