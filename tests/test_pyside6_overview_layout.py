@@ -5,10 +5,10 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from modules.ui.PySide6TrainUIView import PySide6TrainView
+
 from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication, QCheckBox, QGridLayout, QGroupBox, QLabel, QLineEdit, QScrollArea
-
-from modules.ui.PySide6TrainUIView import PySide6TrainView
 
 
 class OverviewLayoutTest(unittest.TestCase):

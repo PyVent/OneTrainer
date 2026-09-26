@@ -2,15 +2,21 @@
 
 from pathlib import Path
 
+from modules.util.ui.pyside6_i18n import current_language, retranslate_tree
+from modules.util.ui.pyside6_theme import COLORS
+
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy,
-    QVBoxLayout, QWidget,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
 )
-
-from modules.util.ui.pyside6_theme import COLORS
-from modules.util.ui.pyside6_i18n import current_language, retranslate_tree
 
 
 def _icon(name: str, color: str) -> QIcon:
@@ -20,37 +26,48 @@ def _icon(name: str, color: str) -> QIcon:
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.scale(2, 2)
-    painter.setPen(QPen(QColor(color), 1.7, Qt.PenStyle.SolidLine,
-                        Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+    painter.setPen(QPen(QColor(color), 1.7, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
     p = painter
 
     if name == "general":
         p.drawPolyline(QPolygonF([QPointF(3, 10), QPointF(11, 3), QPointF(19, 10)]))
-        p.drawRect(QRectF(5, 10, 12, 9)); p.drawRect(QRectF(10, 14, 3, 5))
+        p.drawRect(QRectF(5, 10, 12, 9))
+        p.drawRect(QRectF(10, 14, 3, 5))
     elif name == "model":
         p.drawPolygon(QPolygonF([QPointF(11, 2), QPointF(19, 6), QPointF(11, 10), QPointF(3, 6)]))
         p.drawPolyline(QPolygonF([QPointF(3, 6), QPointF(3, 15), QPointF(11, 20), QPointF(19, 15), QPointF(19, 6)]))
         p.drawLine(11, 10, 11, 20)
     elif name == "data":
         p.drawRoundedRect(QRectF(5, 2, 13, 18), 2, 2)
-        p.drawLine(8, 7, 15, 7); p.drawLine(8, 11, 15, 11); p.drawLine(8, 15, 13, 15)
+        p.drawLine(8, 7, 15, 7)
+        p.drawLine(8, 11, 15, 11)
+        p.drawLine(8, 15, 13, 15)
     elif name == "concepts":
-        p.drawPolygon(QPolygonF([QPointF(11, 2), QPointF(19, 7), QPointF(16, 17),
-                                 QPointF(11, 20), QPointF(6, 17), QPointF(3, 7)]))
+        p.drawPolygon(
+            QPolygonF([QPointF(11, 2), QPointF(19, 7), QPointF(16, 17), QPointF(11, 20), QPointF(6, 17), QPointF(3, 7)])
+        )
         p.drawEllipse(QRectF(9, 8, 4, 4))
     elif name in ("training", "embedding", "additional embeddings"):
         p.drawRoundedRect(QRectF(4, 4, 15, 15), 2, 2)
-        p.drawLine(8, 2, 8, 6); p.drawLine(15, 2, 15, 6); p.drawLine(4, 9, 19, 9)
-        p.drawLine(8, 13, 10, 15); p.drawLine(10, 15, 15, 11)
+        p.drawLine(8, 2, 8, 6)
+        p.drawLine(15, 2, 15, 6)
+        p.drawLine(4, 9, 19, 9)
+        p.drawLine(8, 13, 10, 15)
+        p.drawLine(10, 15, 15, 11)
     elif name == "LoRA":
-        p.drawEllipse(QRectF(3, 3, 16, 16)); p.drawArc(QRectF(7, 7, 8, 8), 40 * 16, 250 * 16)
+        p.drawEllipse(QRectF(3, 3, 16, 16))
+        p.drawArc(QRectF(7, 7, 8, 8), 40 * 16, 250 * 16)
         p.drawLine(13, 5, 15, 7)
     elif name == "backup":
         p.drawRoundedRect(QRectF(4, 7, 15, 12), 2, 2)
-        p.drawLine(4, 10, 19, 10); p.drawLine(9, 14, 14, 14)
-        p.drawLine(7, 7, 7, 4); p.drawLine(7, 4, 16, 4); p.drawLine(16, 4, 16, 7)
+        p.drawLine(4, 10, 19, 10)
+        p.drawLine(9, 14, 14, 14)
+        p.drawLine(7, 7, 7, 4)
+        p.drawLine(7, 4, 16, 4)
+        p.drawLine(16, 4, 16, 7)
     elif name == "sampling":
-        p.drawRect(QRectF(6, 3, 11, 15)); p.drawLine(9, 7, 14, 7)
+        p.drawRect(QRectF(6, 3, 11, 15))
+        p.drawLine(9, 7, 14, 7)
         p.drawLine(11, 10, 11, 15)
     elif name == "cloud":
         p.drawArc(QRectF(3, 9, 8, 8), 70 * 16, 215 * 16)
@@ -58,16 +75,25 @@ def _icon(name: str, color: str) -> QIcon:
         p.drawArc(QRectF(14, 10, 6, 7), 275 * 16, 165 * 16)
         p.drawLine(6, 18, 18, 18)
     elif name == "tools":
-        p.drawLine(4, 18, 17, 5); p.drawLine(6, 4, 18, 16)
-        p.drawEllipse(QRectF(2.5, 16.5, 3, 3)); p.drawEllipse(QRectF(16.5, 2.5, 3, 3))
+        p.drawLine(4, 18, 17, 5)
+        p.drawLine(6, 4, 18, 16)
+        p.drawEllipse(QRectF(2.5, 16.5, 3, 3))
+        p.drawEllipse(QRectF(16.5, 2.5, 3, 3))
     elif name == "help":
         p.drawEllipse(QRectF(3, 3, 16, 16))
         p.drawText(QRectF(4, 2, 14, 16), Qt.AlignmentFlag.AlignCenter, "?")
     elif name == "light":
         p.drawEllipse(QRectF(8, 8, 6, 6))
-        for x1, y1, x2, y2 in ((11, 2, 11, 5), (11, 17, 11, 20), (2, 11, 5, 11),
-                                (17, 11, 20, 11), (4, 4, 6, 6), (16, 16, 18, 18),
-                                (4, 18, 6, 16), (16, 6, 18, 4)):
+        for x1, y1, x2, y2 in (
+            (11, 2, 11, 5),
+            (11, 17, 11, 20),
+            (2, 11, 5, 11),
+            (17, 11, 20, 11),
+            (4, 4, 6, 6),
+            (16, 16, 18, 18),
+            (4, 18, 6, 16),
+            (16, 6, 18, 4),
+        ):
             p.drawLine(QPointF(x1, y1), QPointF(x2, y2))
     elif name == "dark":
         p.drawArc(QRectF(4, 3, 15, 16), 115 * 16, 250 * 16)

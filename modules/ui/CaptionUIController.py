@@ -219,7 +219,7 @@ class CaptionUIController:
                     np_mask = (np_mask - np_mask_min) / (1.0 - np_mask_min) * (1.0 - norm_min) + norm_min
 
                 np_masked_image = (np_image * np_mask * 255.0).astype(np.uint8)
-                masked_image = Image.fromarray(np_masked_image, mode='RGB')
+                masked_image = Image.fromarray(np_masked_image)
 
                 return masked_image, masked_image.size
         else:

@@ -33,8 +33,8 @@ moved onto the manifold with tiny singular values before the optimizer is
 built - the perturbation of the model is ~1e-6 in spectral norm, and the first
 retraction turns the subspaces into the top-r directions of the gradient.
 """
-from collections.abc import Iterable
 import math
+from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 from modules.util.optimizer.riemannion import Riemannion, init_manifold_

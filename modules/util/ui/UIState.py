@@ -87,7 +87,7 @@ class BaseUIState:
             elif isinstance(var, QtVar):
                 var.set(self._display_value(value, value_type))
 
-    def get_var(self, name: str) -> QtVar | "BaseUIState":
+    def get_var(self, name: str) -> QtVar | BaseUIState:
         state: BaseUIState = self
         parts = name.split(".")
         for part in parts[:-1]:
@@ -103,7 +103,7 @@ class BaseUIState:
         nullable: bool
         default: Any
 
-    def get_field_metadata(self, name: str) -> "BaseUIState.VarMeta":
+    def get_field_metadata(self, name: str) -> BaseUIState.VarMeta:
         state: BaseUIState = self
         parts = name.split(".")
         for part in parts[:-1]:

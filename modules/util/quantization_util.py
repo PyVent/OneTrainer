@@ -201,7 +201,6 @@ def replace_linear_with_quantized_layers(
         if quantization.svd_dtype != DataType.NONE:
             if dtype.is_gguf():
                 raise ValueError("SVDQuant cannot be used with GGUF. GGUF is loaded pre-quantized from a file. SVDQuant requires the unquantized weights to be available.")
-            #construct_fn = partial(make_svd_linear(construct_fn), rank=quantization.svd_rank, svd_dtype=quantization.svd_dtype.torch_dtype(), cache_dir=quantization.cache_dir)
             linear_class = make_svd_linear(linear_class)
             kwargs.update({'rank': quantization.svd_rank,
                            'svd_dtype': quantization.svd_dtype.torch_dtype(),

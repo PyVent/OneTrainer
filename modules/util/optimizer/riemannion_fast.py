@@ -39,11 +39,10 @@ Riemannion._pair_step. Состояния хранятся в бакетных �
 # to the OneTrainer package layout. Do not edit the algorithm here -
 # OneTrainer specific glue lives in riemannion_util.py.
 
-import math
-
-import torch
 
 from modules.util.optimizer.riemannion import Riemannion, _factor_point
+
+import torch
 
 try:
     import triton
@@ -347,10 +346,7 @@ class RiemannionFast(Riemannion):
             self._buckets.setdefault(r, []).append(bk)
 
     def _can_batch(self):
-        for A, B, _g in self._lora_groups():
-            if not (A.is_cuda and B.is_cuda):
-                return False
-        return True
+        return all(A.is_cuda and B.is_cuda for A, B, _g in self._lora_groups())
 
     # ---------------------------------------------------------------- step
 
@@ -420,7 +416,7 @@ class RiemannionFast(Riemannion):
 
             # стек градиентов (foreach - несколько мультитензорных запусков)
             srcA, dstA, srcB, dstB = [], [], [], []
-            for j, i in enumerate(act):
+            for i in act:
                 A, B, _g = bk.pairs[i]
                 (srcA.append(A.grad) if A.grad is not None else bk.stackA[i].zero_())
                 if A.grad is not None:
@@ -456,8 +452,8 @@ class RiemannionFast(Riemannion):
                    alpha1=-1.0, use_triton=ut)
             _gram(Yu, Yu, ut, out=G_small[sl])
             _gram(Yv, Yv, ut, out=G_small[P + p0:P + p0 + b])
-            ctx.append(dict(b=b, m=m, n=n, sl=sl, slv=slice(P + p0, P + p0 + b),
-                            U=U, V=V, Up=Up, Vp=Vp, Yu=Yu, Yv=Yv, mC0=mC0))
+            ctx.append({"b": b, "m": m, "n": n, "sl": sl, "slv": slice(P + p0, P + p0 + b),
+                            "U": U, "V": V, "Up": Up, "Vp": Vp, "Yu": Yu, "Yv": Yv, "mC0": mC0})
             p0 += b
 
         # ---- CholeskyQR2: глобальный Cholesky, per-bucket применение ----
@@ -497,7 +493,7 @@ class RiemannionFast(Riemannion):
         K[:, :r, r:] = Rfac[P:].mT   # Rv^T
         K[:, r:, :r] = Rfac[:P]      # Ru
         P1, S1, Q1h = _svd_small(K)
-        mask = (S1 > S1[:, :1] * 1e-7).to(S1.dtype)  # S1[0]==0 -> все False, как в эталоне
+        mask = (S1[:, :1] * 1e-7 < S1).to(S1.dtype)  # S1[0]==0 -> все False, как в эталоне
         P1m = P1 * mask.unsqueeze(1)
         # Q1 = Q1h^T; Q1[:r]^T = Q1h[:, :r]
         Cd = P1m[:, :r, :] @ Q1h[:, :, :r]
@@ -539,7 +535,7 @@ class RiemannionFast(Riemannion):
 
         # ---- фаза E: финальные повороты, транспорт momentum, запись весов ----
         p0 = 0
-        for (bk, idx, act), c in zip(work, ctx):
+        for (bk, idx, act), c in zip(work, ctx, strict=True):
             b, sl = c["b"], c["sl"]
             m, n = bk.m, bk.n
             U, V, Up, Vp = c["U"], c["V"], c["Up"], c["Vp"]

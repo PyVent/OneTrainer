@@ -5,8 +5,6 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QWidget
-
 from modules.ui.ConceptTabController import ConceptTabController
 from modules.ui.PySide6ConceptTabView import PySide6ConceptTabView
 from modules.ui.PySide6SamplingTabView import PySide6SamplingTabView
@@ -16,6 +14,8 @@ from modules.util.config.SampleConfig import SampleConfig
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.enum.ConceptType import ConceptType
 from modules.util.ui.PySide6UIState import PySide6UIState
+
+from PySide6.QtWidgets import QApplication, QWidget
 
 
 class ConceptLayoutTest(unittest.TestCase):

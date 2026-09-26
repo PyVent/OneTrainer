@@ -4,8 +4,6 @@ from unittest.mock import Mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QLineEdit, QPushButton, QScrollArea
-
 from modules.ui.PySide6SchedulerParamsWindowView import PySide6SchedulerParamsWindowView
 from modules.ui.PySide6TimestepDistributionWindowView import PySide6TimestepDistributionWindowView
 from modules.ui.SchedulerParamsWindowController import SchedulerParamsWindowController
@@ -13,6 +11,8 @@ from modules.ui.TimestepDistributionWindowController import TimestepDistribution
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.enum.LearningRateScheduler import LearningRateScheduler
 from modules.util.ui.PySide6UIState import PySide6UIState
+
+from PySide6.QtWidgets import QApplication, QLineEdit, QPushButton, QScrollArea
 
 
 class TrainingParameterDialogTest(unittest.TestCase):

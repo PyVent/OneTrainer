@@ -1,15 +1,26 @@
+from modules.ui.PySide6GenerateCaptionsWindowView import PySide6GenerateCaptionsWindowView
+from modules.ui.PySide6GenerateMasksWindowView import PySide6GenerateMasksWindowView
+from modules.util.ui.pyside6_i18n import translate as tr
+
 from PIL.ImageQt import ImageQt
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
-    QCheckBox, QDialog, QDoubleSpinBox, QFileDialog, QHBoxLayout, QLabel,
-    QLineEdit, QListWidget, QMessageBox, QPushButton, QScrollArea, QSplitter,
-    QVBoxLayout, QWidget,
+    QCheckBox,
+    QDialog,
+    QDoubleSpinBox,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
 )
-
-from modules.ui.PySide6GenerateCaptionsWindowView import PySide6GenerateCaptionsWindowView
-from modules.ui.PySide6GenerateMasksWindowView import PySide6GenerateMasksWindowView
-from modules.util.ui.pyside6_i18n import translate as tr
 
 
 class _MaskPreview(QLabel):

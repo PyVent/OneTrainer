@@ -7,9 +7,9 @@ from typing import Any, Literal
 from modules.util.enum.PathIOType import PathIOType
 from modules.util.enum.TimeUnit import TimeUnit
 from modules.util.path_util import supported_image_extensions, supported_video_extensions
+from modules.util.ui.pyside6_i18n import translate
 from modules.util.ui.pyside6_validation import PySide6FieldValidator, PySide6PathValidator
 from modules.util.ui.UIState import BaseUIState
-from modules.util.ui.pyside6_i18n import translate
 
 from PySide6.QtCore import QPoint, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPen, QPixmap, QWheelEvent

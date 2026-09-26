@@ -5,8 +5,6 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QLabel, QPushButton, QScrollArea
-
 from modules.ui.ConvertModelUIController import ConvertModelUIController
 from modules.ui.MuonAdamWindowController import MuonAdamWindowController
 from modules.ui.OptimizerParamsWindowController import OptimizerParamsWindowController
@@ -18,6 +16,8 @@ from modules.util.config.TrainConfig import TrainConfig, TrainOptimizerConfig
 from modules.util.enum.Optimizer import Optimizer
 from modules.util.enum.TrainingMethod import TrainingMethod
 from modules.util.ui.PySide6UIState import PySide6UIState
+
+from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QLabel, QPushButton, QScrollArea
 
 
 class NestedToolWindowsTest(unittest.TestCase):

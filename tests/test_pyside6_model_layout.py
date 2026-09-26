@@ -5,9 +5,9 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QLabel, QLineEdit
-
 from modules.ui.PySide6TrainUIView import PySide6TrainView
+
+from PySide6.QtWidgets import QApplication, QLabel, QLineEdit
 
 
 class ModelLayoutTest(unittest.TestCase):

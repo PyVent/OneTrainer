@@ -6,8 +6,6 @@ from unittest.mock import Mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
-
 from modules.ui.ConceptTabController import ConceptTabController
 from modules.ui.PySide6AdditionalEmbeddingsTabView import PySide6EmbeddingWidgetView
 from modules.ui.PySide6ConceptTabView import PySide6ConceptWidgetView
@@ -21,6 +19,8 @@ from modules.util.config.ConceptConfig import ConceptConfig
 from modules.util.config.SampleConfig import SampleConfig
 from modules.util.config.TrainConfig import TrainConfig, TrainEmbeddingConfig
 from modules.util.ui.PySide6UIState import PySide6UIState
+
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
 
 
 class ActionLabelsTest(unittest.TestCase):

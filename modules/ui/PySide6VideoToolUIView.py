@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from modules.ui.BaseVideoToolUIView import BaseVideoToolUIView
 from modules.ui.VideoToolUIController import VideoToolUIController
 from modules.util.image_util import load_image
@@ -6,10 +8,8 @@ from modules.util.ui.pyside6_i18n import set_localized_text, translate
 from modules.util.ui.pyside6_util import QtABCMeta
 from modules.util.ui.PySide6UIState import PySide6UIState
 
-from pathlib import Path
-
 from PIL.ImageQt import ImageQt
-from PySide6.QtCore import Qt, QTimer, QSignalBlocker
+from PySide6.QtCore import QSignalBlocker, Qt, QTimer
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QDialog,

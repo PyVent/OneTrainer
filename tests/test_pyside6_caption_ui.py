@@ -8,15 +8,15 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PIL import Image
-from PySide6.QtCore import QPoint, Qt
-from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
-
 from modules.ui.CaptionUIController import CaptionUIController
 from modules.ui.PySide6CaptionUIView import PySide6CaptionUIView
 from modules.ui.PySide6GenerateCaptionsWindowView import PySide6GenerateCaptionsWindowView
 from modules.ui.PySide6GenerateMasksWindowView import PySide6GenerateMasksWindowView
+
+from PIL import Image
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication
 
 
 class CaptionUITest(unittest.TestCase):
@@ -118,7 +118,7 @@ class CaptionUITest(unittest.TestCase):
                 view = view_cls(None, controller, str(self.path), False)
                 view.show()
 
-                def generate(**_options):
+                def generate(started=started, release=release, view=view, **_options):
                     started.set()
                     release.wait(timeout=2)
                     view.set_progress(2, 4)

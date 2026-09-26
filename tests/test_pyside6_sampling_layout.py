@@ -5,12 +5,12 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
-
 from modules.ui.PySide6SamplingTabView import PySide6SampleWidgetView
 from modules.ui.PySide6TrainUIView import PySide6TrainView
 from modules.util.config.SampleConfig import SampleConfig
 from modules.util.config.TrainConfig import TrainConfig
+
+from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
 
 
 class SampleRowLayoutTest(unittest.TestCase):

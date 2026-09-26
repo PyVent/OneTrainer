@@ -6,12 +6,12 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from modules.ui.PySide6TrainUIView import PySide6TrainView
+from modules.util.ui.pyside6_theme import apply_theme, saved_theme
+
 from PySide6.QtCore import QSettings
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication
-
-from modules.util.ui.pyside6_theme import apply_theme, saved_theme
-from modules.ui.PySide6TrainUIView import PySide6TrainView
 
 
 class ThemeTest(unittest.TestCase):

@@ -5,12 +5,12 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PIL import Image
-from PySide6.QtWidgets import QApplication, QLineEdit, QTabWidget, QTextEdit
-
 from modules.ui.PySide6VideoToolUIView import PySide6VideoToolUIView
 from modules.ui.VideoToolUIController import VideoToolUIController
 from modules.util.ui.pyside6_i18n import current_language, set_language
+
+from PIL import Image
+from PySide6.QtWidgets import QApplication, QLineEdit, QTabWidget, QTextEdit
 
 
 class VideoToolUiTest(unittest.TestCase):

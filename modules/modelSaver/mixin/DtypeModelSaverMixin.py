@@ -51,16 +51,10 @@ class DtypeModelSaverMixin:
         if dtype is None:
             return pipeline
 
-        # replace the tokenizers' __deepcopy__ before calling deepcopy, to prevent a copy being made.
-        # the tokenizers try to reload from the file system otherwise
-        for tokenizer in tokenizers:
-            tokenizer.__deepcopy__ = lambda memo, tokenizer=tokenizer: tokenizer
-
-        save_pipeline = copy.deepcopy(pipeline)
+        # Reuse tokenizers: copying them can reload files from disk.
+        memo = {id(tokenizer): tokenizer for tokenizer in tokenizers if tokenizer is not None}
+        save_pipeline = copy.deepcopy(pipeline, memo)
         save_pipeline.to(device="cpu", dtype=dtype, silence_dtype_warnings=True)
-
-        for tokenizer in tokenizers:
-            delattr(tokenizer, '__deepcopy__')
 
         return save_pipeline
 
