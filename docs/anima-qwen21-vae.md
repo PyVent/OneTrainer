@@ -33,6 +33,16 @@ cache under the existing `image` and `text` cache directories, which prevents re
 of the original variant's incompatible latents. Multithreaded data loading
 serializes VAE encoding because these VAEs maintain mutable frame caches.
 
+Text encoder dropout is supported for both variants, with and without latent/text
+caching. It replaces selected captions with the encoded empty prompt used for
+classifier-free guidance. The frozen text encoder and conditioner prepare this
+conditioning once before offloading; cached positive captions remain unchanged.
+
+Debug mode writes decoded images, separate masks (when enabled), and their captions
+to `<debug_dir>/dataloader/epoch-<number>`. Decoded images are always PNG, preserving
+the fourth channel even when a source image is JPEG. These files show dataset
+captions before the per-training-step caption dropout.
+
 ## Saving and resuming
 
 Diffusers exports and internal training backups include the VAE configuration and
@@ -59,4 +69,5 @@ python -m unittest discover -s tests -p test_anima_qwen21_vae.py -v
 These tests use small real VAEs, transformers, tokenizers, and text encoders. They
 cover both model types, RGBA/RGB compatibility, cached and uncached datasets,
 masked training, an optimizer step, sampling, multithreaded VAE encoding,
-Diffusers export/reload, internal backup/resume, and LoRA export/reload.
+caption dropout, RGB/RGBA debug exports over multiple epochs, Diffusers export/reload,
+internal backup/resume, and LoRA export/reload.

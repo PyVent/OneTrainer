@@ -121,6 +121,49 @@ class EmbeddingSaverTest(unittest.TestCase):
         ChromaEmbeddingSaver().save_multiple(model_with(), ModelFormat.DIFFUSERS, self.destination, None)
         self.assertEqual(list(self.directory.iterdir()), [])
 
+    def test_filename_collisions_fail_before_writing_any_embedding(self):
+        for first, second in (("<style one>", "<style_one>"), ("<Style>", "<style>")):
+            with self.subTest(first=first, second=second):
+                additional = [SimpleNamespace(text_encoder_embedding=component(value, uuid, placeholder))
+                              for value, uuid, placeholder in (
+                                  (1, "a", "<earlier>"), (2, "b", first), (3, "c", second),
+                              )]
+                folder = Path(self.destination + "_embeddings")
+                folder.mkdir(exist_ok=True)
+                existing = folder / "earlier.safetensors"
+                existing.write_bytes(b"existing export must survive")
+                with self.assertRaisesRegex(ValueError, "both export to"):
+                    ChromaEmbeddingSaver().save_multiple(
+                        model_with(additional=additional), ModelFormat.SAFETENSORS, self.destination, torch.float16,
+                    )
+                self.assertEqual(list(folder.iterdir()), [existing])
+                self.assertEqual(existing.read_bytes(), b"existing export must survive")
+
+    def test_cached_uuid_and_live_placeholder_cannot_overwrite_each_other(self):
+        additional = SimpleNamespace(text_encoder_embedding=component(1, "live", "<cached>"))
+        model = model_with(states={"cached": {"t5": torch.ones(2, 3)}}, additional=[additional])
+        with self.assertRaisesRegex(ValueError, "both export to cached.safetensors"):
+            ChromaEmbeddingSaver().save_multiple(model, ModelFormat.SAFETENSORS, self.destination, None)
+        self.assertEqual(list(self.directory.iterdir()), [])
+
+    def test_empty_sanitized_filename_is_rejected(self):
+        additional = SimpleNamespace(text_encoder_embedding=component(1, "extra", "<>"))
+        with self.assertRaisesRegex(ValueError, "empty filename"):
+            ChromaEmbeddingSaver().save_multiple(
+                model_with(additional=[additional]), ModelFormat.SAFETENSORS, self.destination, None,
+            )
+        self.assertEqual(list(self.directory.iterdir()), [])
+
+    def test_internal_backup_allows_colliding_placeholders_and_uses_distinct_uuids(self):
+        additional = [SimpleNamespace(text_encoder_embedding=component(value, uuid, "<same>"))
+                      for value, uuid in ((1, "first"), (2, "second"))]
+        ChromaEmbeddingSaver().save_multiple(
+            model_with(additional=additional), ModelFormat.INTERNAL, str(self.directory), None,
+        )
+        for value, uuid in ((1, "first"), (2, "second")):
+            saved = load_file(str(self.directory / "embeddings" / f"{uuid}.safetensors"))
+            self.assertTrue(torch.all(saved["t5"] == value))
+
 
 if __name__ == "__main__":
     unittest.main()

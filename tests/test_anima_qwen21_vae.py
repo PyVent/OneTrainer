@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from random import Random
+from unittest.mock import patch
 
 from modules.dataLoader.AnimaBaseDataLoader import AnimaBaseDataLoader
 from modules.dataLoader.EncodeAnimaVAE import EncodeAnimaVAE
@@ -15,6 +17,7 @@ from modules.modelSaver.anima.AnimaModelSaver import AnimaModelSaver
 from modules.modelSaver.AnimaFineTuneModelSaver import AnimaFineTuneModelSaver
 from modules.modelSaver.AnimaLoRAModelSaver import AnimaLoRAModelSaver
 from modules.modelSetup.AnimaFineTuneSetup import AnimaFineTuneSetup
+from modules.modelSetup.AnimaLoRASetup import AnimaLoRASetup
 from modules.module.LoRAModule import LoRAModuleWrapper
 from modules.util.config.ConceptConfig import ConceptConfig
 from modules.util.config.TrainConfig import TrainConfig
@@ -207,10 +210,10 @@ class AnimaVaeTest(unittest.TestCase):
                     config = model.train_config
                     dataset_path = root / "images"
                     dataset_path.mkdir()
-                    Image.new("RGB", (64, 64), (100, 150, 200)).save(dataset_path / "rgb.png")
+                    Image.new("RGB", (64, 64), (100, 150, 200)).save(dataset_path / "rgb.jpg")
                     Image.new("RGBA", (64, 64), (50, 100, 200, 85)).save(dataset_path / "rgba.png")
                     for filename in ("rgb", "rgba"):
-                        (dataset_path / f"{filename}.txt").write_text("test", encoding="utf-8")
+                        (dataset_path / f"{filename}.txt").write_text(f"test {filename} прозрачность", encoding="utf-8")
                         Image.new("L", (64, 64), 255).save(dataset_path / f"{filename}-masklabel.png")
                     concept = ConceptConfig.default_values()
                     concept.path = str(dataset_path)
@@ -224,13 +227,23 @@ class AnimaVaeTest(unittest.TestCase):
                     config.latent_caching = cached
                     config.dataloader_threads = 2
                     config.cache_dir = str(root / "cache")
+                    config.debug_mode = True
+                    config.debug_dir = str(root / "debug")
+                    config.text_encoder.dropout_probability = 0.5
                     setup = AnimaFineTuneSetup(torch.device("cpu"), torch.device("cpu"), False)
+                    setup.setup_train_device(model, config)
                     loader = AnimaBaseDataLoader(
                         torch.device("cpu"), torch.device("cpu"), config, model, setup, TrainProgress(),
                     )
                     loader.get_data_set().start_next_epoch()
                     batches = list(loader.get_data_loader())
                     self.assertEqual(len(batches), 2)
+                    self._check_debug_exports(root, model, 0)
+                    loader.get_data_set().start_next_epoch()
+                    next_batches = list(loader.get_data_loader())
+                    self.assertEqual({x["image_path"][0] for x in batches},
+                                     {x["image_path"][0] for x in next_batches})
+                    self._check_debug_exports(root, model, 1)
                     batch = batches[0]
                     scale = model.vae.spatial_compression_ratio
                     self.assertEqual(tuple(batch["latent_image"].shape), (1, model.vae.config.z_dim, 1, 64 // scale, 64 // scale))
@@ -252,6 +265,68 @@ class AnimaVaeTest(unittest.TestCase):
                     )
                     self.assertEqual(result.data.mode, "RGBA" if model.image_channels == 4 else "RGB")
                     self.assertEqual(result.data.size, (64, 64))
+
+    def _check_debug_exports(self, root, model, epoch):
+        folder = root / "debug" / "dataloader" / f"epoch-{epoch}"
+        images = list(folder.glob("*-decoded_image.png"))
+        self.assertEqual(len(images), 2)
+        for image in images:
+            prefix = image.name.removesuffix("-decoded_image.png")
+            name = prefix.split("-", 1)[1]
+            self.assertEqual((folder / f"{prefix}-prompt.txt").read_text(encoding="utf-8"),
+                             f"test {name} прозрачность")
+            with Image.open(image) as decoded, Image.open(folder / f"{prefix}-decoded_mask.png") as mask:
+                self.assertEqual(decoded.mode, "RGBA" if model.image_channels == 4 else "RGB")
+                self.assertEqual(decoded.size, (64, 64))
+                self.assertEqual(mask.mode, "L")
+                self.assertEqual(mask.size, decoded.size)
+                self.assertEqual(mask.getextrema(), (255, 255))
+
+    def test_caption_dropout_uses_empty_prompt_for_cached_and_live_text(self):
+        for model_type in MODEL_TYPES:
+            with self.subTest(model_type=model_type), tempfile.TemporaryDirectory() as directory:
+                model = small_model(model_type, Path(directory))
+                device = torch.device("cpu")
+                positive = model.encode_text(device, text=["test"] * 3)
+                original = positive.clone()
+                empty = model.encode_text(device, text="")
+                for probability, selected in ((0.0, []), (1.0, [0, 1, 2]), (0.5, [0])):
+                    expected = positive.clone()
+                    expected[selected] = empty
+                    live = model.encode_text(
+                        device, text=["test"] * 3, rand=Random(1),
+                        text_encoder_dropout_probability=probability,
+                    )
+                    cached = model.encode_text(
+                        device, text_encoder_output=positive, rand=Random(1),
+                        text_encoder_dropout_probability=probability,
+                    )
+                    torch.testing.assert_close(live, expected)
+                    torch.testing.assert_close(cached, expected)
+                    torch.testing.assert_close(positive, original)
+                for invalid in (-0.1, 1.1, float("nan")):
+                    with self.assertRaisesRegex(ValueError, "between 0 and 1"):
+                        model.encode_text(device, text_encoder_output=positive, text_encoder_dropout_probability=invalid)
+
+    def test_dropout_conditioning_survives_text_encoder_offloading_for_both_setups(self):
+        for setup_type in (AnimaFineTuneSetup, AnimaLoRASetup):
+            with self.subTest(setup=setup_type), tempfile.TemporaryDirectory() as directory:
+                model = small_model(ModelType.ANIMA_QWEN21_VAE, Path(directory))
+                config = model.train_config
+                config.latent_caching = True
+                config.text_encoder.dropout_probability = 1.0
+                setup = setup_type(torch.device("cpu"), torch.device("cpu"), False)
+                setup.setup_train_device(model, config)
+                empty = model.empty_text_encoder_output
+                self.assertIsNotNone(empty)
+                self.assertFalse(empty.requires_grad)
+                positive = torch.ones_like(empty, dtype=torch.float16).expand(3, -1, -1)
+                with patch.object(model.text_encoder, "forward", side_effect=AssertionError("Encoder is offloaded")):
+                    dropped = model.encode_text(
+                        torch.device("cpu"), text_encoder_output=positive, text_encoder_dropout_probability=1.0,
+                    )
+                    setup.setup_train_device(model, config)
+                torch.testing.assert_close(dropped, empty.to(positive).expand_as(positive))
 
     def test_uncached_text_encoding_accepts_dataset_tokens(self):
         with tempfile.TemporaryDirectory() as directory, torch.no_grad():

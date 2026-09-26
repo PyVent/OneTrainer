@@ -13,6 +13,8 @@ from modules.ui.PySide6ConvertModelUIView import PySide6ConvertModelUIView
 from modules.ui.TopBarController import TopBarController
 from modules.util import create
 from modules.util.config.TrainConfig import TrainConfig
+from modules.util.enum.ModelFormat import ModelFormat
+from modules.util.enum.ModelType import ModelType
 from modules.util.enum.TrainingMethod import TrainingMethod
 
 from PySide6.QtCore import QTimer
@@ -67,6 +69,9 @@ class ConvertAsyncTest(unittest.TestCase):
 
     def test_controller_work_cleans_up_and_never_touches_view(self):
         controller = ConvertModelUIController()
+        controller.convert_model_args.input_name = "input.safetensors"
+        controller.convert_model_args.output_model_destination = "output.safetensors"
+        controller.convert_model_args.output_model_format = ModelFormat.ORIGINAL_SINGLE_FILE
 
         class View:
             def set_converting(self, _active):
@@ -79,6 +84,45 @@ class ConvertAsyncTest(unittest.TestCase):
             self.assertRaisesRegex(ValueError, "synthetic load error"),
         ):
             controller.perform_conversion()
+        cleanup.assert_called_once_with()
+
+    def test_model_changes_remove_unsupported_embedding_mode(self):
+        controller = ConvertModelUIController()
+        controller.convert_model_args.training_method = TrainingMethod.EMBEDDING
+        window = controller.create_window(None, PySide6ConvertModelUIView)
+        self.addCleanup(window.close)
+        self.assertEqual(controller.convert_model_args.training_method, TrainingMethod.EMBEDDING)
+        model_var = window.ui_state.get_var("model_type")
+        for model_type in (ModelType.ANIMA, ModelType.ANIMA_QWEN21_VAE, ModelType.QWEN, ModelType.FLUX_2):
+            with self.subTest(model=model_type):
+                model_var.set(str(model_type))
+                self.app.processEvents()
+                methods = window._layout.itemAtPosition(1, 1).widget()
+                self.assertEqual([methods.itemData(i) for i in range(methods.count())],
+                                 [str(TrainingMethod.FINE_TUNE), str(TrainingMethod.LORA)])
+                self.assertIn(controller.convert_model_args.training_method,
+                              controller.convert_model_args.supported_training_methods())
+                self.assertIn(controller.convert_model_args.output_model_format,
+                              model_type.supported_output_formats(controller.convert_model_args.training_method))
+
+        window.ui_state.get_var("training_method").set(str(TrainingMethod.LORA))
+        model_var.set(str(ModelType.STABLE_DIFFUSION_15))
+        self.app.processEvents()
+        self.assertEqual(controller.convert_model_args.training_method, TrainingMethod.LORA)
+        methods = window._layout.itemAtPosition(1, 1).widget()
+        self.assertIn(str(TrainingMethod.EMBEDDING), [methods.itemData(i) for i in range(methods.count())])
+
+    def test_unsupported_conversion_is_rejected_before_loading_or_downloading(self):
+        controller = ConvertModelUIController()
+        controller.convert_model_args.model_type = ModelType.ANIMA_QWEN21_VAE
+        controller.convert_model_args.training_method = TrainingMethod.EMBEDDING
+        with (
+            patch("modules.ui.ConvertModelUIController.create.create_model_loader") as loader,
+            patch("modules.ui.ConvertModelUIController.torch_gc") as cleanup,
+            self.assertRaisesRegex(ValueError, "does not support EMBEDDING"),
+        ):
+            controller.perform_conversion()
+        loader.assert_not_called()
         cleanup.assert_called_once_with()
 
     def test_convert_stays_responsive_and_recovers_after_error(self):

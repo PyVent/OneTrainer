@@ -57,6 +57,7 @@ class AnimaFineTuneSetup(
             config: TrainConfig,
     ):
         vae_on_train_device = not config.latent_caching
+        self._prepare_text_dropout(model, config)
         text_encoder_on_train_device = not config.latent_caching
 
         parts = ["transformer"]

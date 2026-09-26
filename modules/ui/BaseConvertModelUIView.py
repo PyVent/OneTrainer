@@ -20,11 +20,7 @@ class BaseConvertModelUIView:
         # training method
         self.components.label(frame, 1, 0, "Training Method",
                          tooltip="The type of model to convert")
-        self.components.options_kv(frame, 1, 1, [
-            ("Base Model", TrainingMethod.FINE_TUNE),
-            ("LoRA", TrainingMethod.LORA),
-            ("Embedding", TrainingMethod.EMBEDDING),
-        ], ui_state, "training_method", command=on_model_or_method_change)
+        # The view rebuilds the method selector when the selected model changes.
 
         # input name
         self.components.label(frame, 2, 0, "Input name",

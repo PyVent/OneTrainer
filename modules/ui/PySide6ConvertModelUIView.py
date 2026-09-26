@@ -37,6 +37,9 @@ class PySide6ConvertModelUIView(BaseConvertModelUIView, QDialog):
         self.controller = controller
         self.ui_state = PySide6UIState(controller.convert_model_args)
         self._dynamic_frame = None
+        self._method_choices = None
+        self._method_combo = None
+        self._rebuilding = False
         self._conversion_thread: QThread | None = None
         self._conversion_worker: _ConversionWorker | None = None
         self._conversion_result: tuple[bool, str] | None = None
@@ -67,14 +70,31 @@ class PySide6ConvertModelUIView(BaseConvertModelUIView, QDialog):
         outer.addWidget(self._status_label, 1, 0)
 
     def _rebuild_dynamic_ui(self, *args):
-        if self._dynamic_frame is not None:
-            self._dynamic_frame.hide()
-            self._dynamic_frame.deleteLater()
+        if self._rebuilding:
+            return
+        self._rebuilding = True
+        try:
+            choices = self.controller.get_training_methods()
+            if choices != self._method_choices:
+                if self._method_combo is not None:
+                    self._layout.removeWidget(self._method_combo)
+                    self._method_combo.hide()
+                    self._method_combo.deleteLater()
+                self._method_choices = choices
+                self._method_combo = pyside6_components.options_kv(
+                    self._frame, 1, 1, choices, self.ui_state, "training_method", command=self._rebuild_dynamic_ui,
+                )
 
-        self._dynamic_frame = QWidget(self._frame)
-        self._layout.addWidget(self._dynamic_frame, 4, 0, 1, 2)
+            if self._dynamic_frame is not None:
+                self._layout.removeWidget(self._dynamic_frame)
+                self._dynamic_frame.hide()
+                self._dynamic_frame.deleteLater()
 
-        self.build_dynamic_content(self._dynamic_frame, self.controller, self.ui_state)
+            self._dynamic_frame = QWidget(self._frame)
+            self._layout.addWidget(self._dynamic_frame, 4, 0, 1, 2)
+            self.build_dynamic_content(self._dynamic_frame, self.controller, self.ui_state)
+        finally:
+            self._rebuilding = False
 
     def set_converting(self, active):
         self.button.setEnabled(not active)

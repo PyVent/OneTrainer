@@ -230,10 +230,37 @@ def _svd_small(K):
     n <= 32; крупнее torch падает в поматричный цикл (78 мс на (38,64,64) против
     0.7 мс на 32x32) - тогда дешевле прогнать через CPU LAPACK (17 мс с
     трансфером). Актуально для LoRA-рангов > 16 (ядро шага - 2r x 2r)."""
-    if K.is_cuda and K.shape[-1] > 32:
-        P, S, Q = torch.linalg.svd(K.cpu())
-        return P.to(K.device), S.to(K.device), Q.to(K.device)
-    return torch.linalg.svd(K)
+    # Check before LAPACK: NaN/Inf can otherwise surface as an MKL SLASCL error.
+    if not torch.isfinite(K).all():
+        raise FloatingPointError("Riemannion SVD input contains NaN or Inf")
+    work = K.cpu() if K.is_cuda and K.shape[-1] > 32 else K
+    scale = work.abs().amax(dim=(-2, -1), keepdim=True)
+    scale = torch.where(scale > 0, scale, torch.ones_like(scale))
+    try:
+        P, S, Q = torch.linalg.svd(work / scale, full_matrices=False)
+        S = S * scale.squeeze(-1)
+        if not all(torch.isfinite(value).all() for value in (P, S, Q)):
+            raise torch.linalg.LinAlgError("Non-finite SVD result")
+    except torch.linalg.LinAlgError:
+        # A different LAPACK driver and float64 recover finite, ill-conditioned
+        # cores without perturbing the matrix or discarding singular directions.
+        from scipy.linalg import svd
+
+        precise = K.detach().to(device="cpu", dtype=torch.float64)
+        rows, columns = precise.shape[-2:]
+        factors = []
+        for matrix in precise.reshape(-1, rows, columns):
+            magnitude = matrix.abs().max().item() or 1.0
+            left, singular, right = svd((matrix / magnitude).numpy(), full_matrices=False, lapack_driver="gesvd")
+            factors.append((torch.from_numpy(left), torch.from_numpy(singular) * magnitude, torch.from_numpy(right)))
+        P, S, Q = (
+            torch.stack(values).reshape(*K.shape[:-2], *values[0].shape)
+            for values in zip(*factors, strict=True)
+        )
+    result = tuple(value.to(device=K.device, dtype=K.dtype) for value in (P, S, Q))
+    if not all(torch.isfinite(value).all() for value in result):
+        raise FloatingPointError("Riemannion SVD result exceeds the optimizer's precision")
+    return result
 
 
 def _chol_inv_lt(G, eps=1e-6):
@@ -248,13 +275,15 @@ def _chol_inv_lt(G, eps=1e-6):
     усиленный fp-шум; зануление мёртвых столбцов (Gram-диагональ < 1e-12 max)
     восстанавливает эталонную семантику."""
     r = G.shape[-1]
-    eye = torch.eye(r, device=G.device)
+    eye = torch.eye(r, device=G.device, dtype=G.dtype)
     d = G.diagonal(dim1=-2, dim2=-1).clamp_min(0.0)
     dmax = d.max(-1, keepdim=True).values
     keep = d > dmax * 1e-12
     shift = (dmax * eps + 1e-30).unsqueeze(-1)
-    L = torch.linalg.cholesky_ex(G + shift * eye).L
-    bad = ~torch.isfinite(L.diagonal(dim1=-2, dim2=-1)).all(-1)
+    L, info = torch.linalg.cholesky_ex(G + shift * eye)
+    # Failed factorizations can have finite (even zero/negative) diagonals.
+    # Only info == 0 guarantees a usable factor.
+    bad = (info != 0) | ~torch.isfinite(L).all(dim=(-2, -1))
     L = torch.where(bad[:, None, None], torch.diag_embed((d + shift.squeeze(-1)).sqrt()), L)
     Linv = torch.linalg.solve_triangular(L, eye.expand_as(L).contiguous(), upper=False)
     return L, Linv.mT.contiguous(), keep
