@@ -11,6 +11,7 @@ from modules.util.optimizer_util import init_model_parameters
 from modules.util.TrainProgress import TrainProgress
 
 
+@factory.register(BaseModelSetup, ModelType.ANIMA_QWEN21_VAE, TrainingMethod.FINE_TUNE)
 @factory.register(BaseModelSetup, ModelType.ANIMA, TrainingMethod.FINE_TUNE)
 class AnimaFineTuneSetup(
     BaseAnimaSetup,

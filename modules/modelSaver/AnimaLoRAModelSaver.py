@@ -4,7 +4,7 @@ from modules.modelSaver.GenericLoRAModelSaver import make_lora_model_saver
 from modules.util.enum.ModelType import ModelType
 
 AnimaLoRAModelSaver = make_lora_model_saver(
-    ModelType.ANIMA,
+    [ModelType.ANIMA, ModelType.ANIMA_QWEN21_VAE],
     model_class=AnimaModel,
     lora_saver_class=AnimaLoRASaver,
     embedding_saver_class=None,

@@ -1,6 +1,7 @@
 import os
 
 from modules.dataLoader.BaseDataLoader import BaseDataLoader
+from modules.dataLoader.EncodeAnimaVAE import EncodeAnimaVAE
 from modules.dataLoader.mixin.DataLoaderText2ImageMixin import DataLoaderText2ImageMixin
 from modules.model.AnimaModel import PROMPT_MAX_LENGTH, AnimaModel
 from modules.model.BaseModel import BaseModel
@@ -14,7 +15,6 @@ from modules.util.TrainProgress import TrainProgress
 from mgds.pipelineModules.DecodeTokens import DecodeTokens
 from mgds.pipelineModules.DecodeVAE import DecodeVAE
 from mgds.pipelineModules.EncodeAnimaText import EncodeAnimaText
-from mgds.pipelineModules.EncodeVAE import EncodeVAE
 from mgds.pipelineModules.RescaleImageChannels import RescaleImageChannels
 from mgds.pipelineModules.SampleVAEDistribution import SampleVAEDistribution
 from mgds.pipelineModules.SaveImage import SaveImage
@@ -23,6 +23,7 @@ from mgds.pipelineModules.ScaleImage import ScaleImage
 from mgds.pipelineModules.Tokenize import Tokenize
 
 
+@factory.register(BaseDataLoader, ModelType.ANIMA_QWEN21_VAE)
 @factory.register(BaseDataLoader, ModelType.ANIMA)
 class AnimaBaseDataLoader(
     BaseDataLoader,
@@ -30,9 +31,10 @@ class AnimaBaseDataLoader(
 ):
     def _preparation_modules(self, config: TrainConfig, model: AnimaModel):
         rescale_image = RescaleImageChannels(image_in_name='image', image_out_name='image', in_range_min=0, in_range_max=1, out_range_min=-1, out_range_max=1)
-        encode_image = EncodeVAE(in_name='image', out_name='latent_image_distribution', vae=model.vae, autocast_contexts=[model.autocast_context], dtype=model.train_dtype.torch_dtype())
+        encode_image = EncodeAnimaVAE(in_name='image', out_name='latent_image_distribution', vae=model.vae, autocast_contexts=[model.autocast_context], dtype=model.train_dtype.torch_dtype())
         image_sample = SampleVAEDistribution(in_name='latent_image_distribution', out_name='latent_image', mode='mean')
-        downscale_mask = ScaleImage(in_name='mask', out_name='latent_mask', factor=0.125)
+        vae_scale_factor = model.vae.spatial_compression_ratio
+        downscale_mask = ScaleImage(in_name='mask', out_name='latent_mask', factor=1 / vae_scale_factor)
         # Anima has no chat template — tokenize raw prompt with both tokenizers
         tokenize_prompt = Tokenize(in_name='prompt', tokens_out_name='tokens', mask_out_name='tokens_mask', tokenizer=model.tokenizer, max_token_length=PROMPT_MAX_LENGTH)
         tokenize_t5 = Tokenize(in_name='prompt', tokens_out_name='t5_tokens', mask_out_name='t5_tokens_mask', tokenizer=model.t5_tokenizer, max_token_length=PROMPT_MAX_LENGTH)
@@ -76,6 +78,9 @@ class AnimaBaseDataLoader(
             sort_names=sort_names,
             config=config,
             text_caching=True,
+            # Invalidate caches produced before RGBA support and keep the original Anima cache separate.
+            cache_namespace=f"anima-qwen21-v2-{model.image_channels}ch"
+                if model.model_type == ModelType.ANIMA_QWEN21_VAE else None,
         )
 
     def _output_modules(self, config: TrainConfig, model: AnimaModel, model_setup: BaseAnimaSetup):
@@ -112,7 +117,7 @@ class AnimaBaseDataLoader(
             model.materialize("vae")
 
         decode_image = DecodeVAE(in_name='latent_image', out_name='decoded_image', vae=model.vae, autocast_contexts=[model.autocast_context], dtype=model.train_dtype.torch_dtype())
-        upscale_mask = ScaleImage(in_name='latent_mask', out_name='decoded_mask', factor=8)
+        upscale_mask = ScaleImage(in_name='latent_mask', out_name='decoded_mask', factor=model.vae.spatial_compression_ratio)
         decode_prompt = DecodeTokens(in_name='tokens', out_name='decoded_prompt', tokenizer=model.tokenizer)
 
         #FIXME https://github.com/Nerogar/OneTrainer/issues/1015

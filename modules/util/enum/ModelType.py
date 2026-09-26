@@ -41,6 +41,7 @@ class ModelType(Enum):
     QWEN = 'QWEN'
 
     ANIMA = 'ANIMA'
+    ANIMA_QWEN21_VAE = 'ANIMA_QWEN21_VAE'
     KREA_2 = 'KREA_2'
 
     Z_IMAGE = 'Z_IMAGE'
@@ -106,7 +107,7 @@ class ModelType(Enum):
         return self == ModelType.QWEN
 
     def is_anima(self):
-        return self == ModelType.ANIMA
+        return self in (ModelType.ANIMA, ModelType.ANIMA_QWEN21_VAE)
 
     def is_krea2(self):
         return self == ModelType.KREA_2
@@ -305,6 +306,7 @@ _MODEL_PARTS: dict[ModelType, tuple[str, ...]] = {
     ModelType.FLUX_FILL_DEV_1: ("transformer", "text_encoder", "text_encoder_2", "vae"),
     ModelType.FLUX_2: ("transformer", "text_encoder", "vae"),
     ModelType.ANIMA: ("transformer", "text_encoder", "vae"),
+    ModelType.ANIMA_QWEN21_VAE: ("transformer", "text_encoder", "vae"),
     ModelType.SANA: ("transformer", "text_encoder", "vae"),
     ModelType.HUNYUAN_VIDEO: ("transformer", "text_encoder", "text_encoder_2", "vae"),
     ModelType.HI_DREAM_FULL: ("transformer", "text_encoder", "text_encoder_2", "text_encoder_3", "text_encoder_4", "vae"),

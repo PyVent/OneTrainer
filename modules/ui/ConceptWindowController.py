@@ -6,9 +6,11 @@ import threading
 import time
 import traceback
 
+from modules.dataLoader.RGBAImageAugmentations import RandomBrightness, RandomContrast, RandomHue, RandomSaturation
 from modules.util import concept_stats, huggingface_util, path_util
 from modules.util.config.ConceptConfig import ConceptConfig
 from modules.util.config.TrainConfig import TrainConfig
+from modules.util.enum.ModelType import ModelType
 from modules.util.image_util import load_image
 
 from mgds.LoadingPipeline import LoadingPipeline
@@ -16,16 +18,12 @@ from mgds.OutputPipelineModule import OutputPipelineModule
 from mgds.PipelineModule import PipelineModule
 from mgds.pipelineModules.CapitalizeTags import CapitalizeTags
 from mgds.pipelineModules.DropTags import DropTags
-from mgds.pipelineModules.RandomBrightness import RandomBrightness
 from mgds.pipelineModules.RandomCircularMaskShrink import (
     RandomCircularMaskShrink,
 )
-from mgds.pipelineModules.RandomContrast import RandomContrast
 from mgds.pipelineModules.RandomFlip import RandomFlip
-from mgds.pipelineModules.RandomHue import RandomHue
 from mgds.pipelineModules.RandomMaskRotateCrop import RandomMaskRotateCrop
 from mgds.pipelineModules.RandomRotate import RandomRotate
-from mgds.pipelineModules.RandomSaturation import RandomSaturation
 from mgds.pipelineModules.ShuffleTags import ShuffleTags
 from mgds.pipelineModuleTypes.RandomAccessPipelineModule import RandomAccessPipelineModule
 
@@ -109,7 +107,8 @@ class ConceptWindowController:
                         break
 
         self.preview_is_placeholder = preview_image_path == placeholder_path
-        image = load_image(preview_image_path, 'RGB')
+        image_mode = "RGBA" if self.train_config.model_type == ModelType.ANIMA_QWEN21_VAE else "RGB"
+        image = load_image(preview_image_path, image_mode)
         image_tensor = functional.to_tensor(image)
 
         splitext = os.path.splitext(preview_image_path)
@@ -229,7 +228,8 @@ class ConceptWindowController:
             prompt_output = ""
 
         mask_tensor = torch.clamp(mask_tensor, 0.3, 1)
-        image_tensor = image_tensor * mask_tensor
+        # The training mask is distinct from image alpha; dim only the RGB preview.
+        image_tensor[:3] = image_tensor[:3] * mask_tensor
 
         image = functional.to_pil_image(image_tensor)
 
