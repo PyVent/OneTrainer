@@ -2,6 +2,7 @@ import math
 from contextlib import nullcontext
 from random import Random
 
+from modules.model.anima.pipeline_anima21 import Anima21Pipeline
 from modules.model.BaseModel import BaseModel
 from modules.module.LoRAModule import LoRAModuleWrapper
 from modules.util.convert_util import add_prefix
@@ -15,10 +16,10 @@ from torch import Tensor
 from diffusers import (
     AnimaAutoBlocks,
     AnimaTextConditioner,
-    AutoencoderKLQwenImage,
     CosmosTransformer3DModel,
     FlowMatchEulerDiscreteScheduler,
 )
+from diffusers.models.modeling_utils import ModelMixin
 from transformers import Qwen2Tokenizer, Qwen3Model, T5TokenizerFast
 
 PROMPT_MAX_LENGTH = 512
@@ -31,7 +32,7 @@ class AnimaModel(BaseModel):
     noise_scheduler: FlowMatchEulerDiscreteScheduler | None
     text_encoder: Qwen3Model | None
     text_conditioner: AnimaTextConditioner | None
-    vae: AutoencoderKLQwenImage | None
+    vae: ModelMixin | None
     transformer: CosmosTransformer3DModel | None
 
     # autocast context
@@ -143,6 +144,17 @@ class AnimaModel(BaseModel):
         self.text_conditioner.eval()
 
     def create_pipeline(self):
+        if self.model_type == ModelType.ANIMA_QWEN21_VAE:
+            return Anima21Pipeline(
+                text_encoder=self.text_encoder,
+                tokenizer=self.tokenizer,
+                t5_tokenizer=self.t5_tokenizer,
+                text_conditioner=self.text_conditioner,
+                transformer=self.transformer,
+                vae=self.vae,
+                scheduler=self.noise_scheduler,
+            )
+
         pipe = AnimaAutoBlocks().init_pipeline()
         pipe.update_components(
             text_encoder=self.text_encoder,
@@ -155,6 +167,12 @@ class AnimaModel(BaseModel):
         )
         return pipe
 
+    @property
+    def image_channels(self) -> int:
+        if self.model_type == ModelType.ANIMA_QWEN21_VAE:
+            return self.vae.config.in_channels
+        return super().image_channels
+
     def encode_text(
             self,
             train_device: torch.device,
@@ -163,6 +181,8 @@ class AnimaModel(BaseModel):
             text: str | list[str] = None,
             tokens: Tensor = None,
             tokens_mask: Tensor = None,
+            t5_tokens: Tensor = None,
+            t5_tokens_mask: Tensor = None,
             text_encoder_layer_skip: int = 0,
             text_encoder_dropout_probability: float | None = None,
             text_encoder_output: Tensor = None,
@@ -190,10 +210,12 @@ class AnimaModel(BaseModel):
                 truncation=True,
                 return_tensors="pt",
             )
-            t5_ids = t5_output.input_ids.to(self.text_encoder.device)
-            t5_mask = t5_output.attention_mask.to(self.text_encoder.device)
+            t5_tokens = t5_output.input_ids.to(self.text_encoder.device)
+            t5_tokens_mask = t5_output.attention_mask.to(self.text_encoder.device)
 
         if text_encoder_output is None:
+            if t5_tokens is None or t5_tokens_mask is None:
+                raise ValueError("Anima text encoding requires T5 tokens and their attention mask")
             with self.text_encoder_autocast_context:
                 qwen_hidden = self.text_encoder(
                     tokens,
@@ -204,8 +226,8 @@ class AnimaModel(BaseModel):
                 qwen_hidden = qwen_hidden * tokens_mask.to(qwen_hidden).unsqueeze(-1)
                 text_encoder_output = self.text_conditioner(
                     source_hidden_states=qwen_hidden.to(dtype=self.text_conditioner.dtype),
-                    target_input_ids=t5_ids,
-                    target_attention_mask=t5_mask,
+                    target_input_ids=t5_tokens,
+                    target_attention_mask=t5_tokens_mask,
                     source_attention_mask=tokens_mask,
                 )
 
@@ -226,14 +248,14 @@ class AnimaModel(BaseModel):
         latents_std = 1.0 / torch.tensor(self.vae.config.latents_std, device=latents.device, dtype=latents.dtype).view(1, self.vae.config.z_dim, 1, 1, 1)
         return latents / latents_std + latents_mean
 
-    def calculate_timestep_shift(self, latent_width: int, latent_height: int):
+    def calculate_timestep_shift(self, latent_height: int, latent_width: int):
         base_seq_len = self.noise_scheduler.config.base_image_seq_len
         max_seq_len = self.noise_scheduler.config.max_image_seq_len
         base_shift = self.noise_scheduler.config.base_shift
         max_shift = self.noise_scheduler.config.max_shift
-        patch_size = 2
+        patch_height, patch_width = self.transformer.config.patch_size[-2:]
 
-        image_seq_len = (latent_width // patch_size) * (latent_height // patch_size)
+        image_seq_len = (latent_height // patch_height) * (latent_width // patch_width)
         m = (max_shift - base_shift) / (max_seq_len - base_seq_len)
         b = base_shift - m * base_seq_len
         mu = image_seq_len * m + b

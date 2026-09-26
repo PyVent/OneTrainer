@@ -98,6 +98,11 @@ class BaseModel(metaclass=ABCMeta):
         self.train_dtype = DataType.FLOAT_32
 
     @property
+    def image_channels(self) -> int:
+        """Image input channels. Models must explicitly opt in to RGBA loading."""
+        return 3
+
+    @property
     def train_device(self) -> torch.device:
         return torch.device(self.train_config.train_device)
 

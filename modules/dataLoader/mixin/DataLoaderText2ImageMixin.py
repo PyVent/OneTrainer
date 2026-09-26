@@ -4,7 +4,9 @@ from abc import ABCMeta, abstractmethod
 from collections.abc import Callable
 
 import modules.util.multi_gpu_util as multi
+from modules.dataLoader.LoadImage import LoadImage
 from modules.dataLoader.ProgressCollectPaths import ProgressCollectPaths
+from modules.dataLoader.RGBAImageAugmentations import RandomBrightness, RandomContrast, RandomHue, RandomSaturation
 from modules.model.BaseModel import BaseModel
 from modules.modelSetup.BaseModelSetup import BaseModelSetup
 from modules.modelSetup.mixin.ModelSetupText2ImageMixin import ModelSetupText2ImageMixin
@@ -28,19 +30,14 @@ from mgds.pipelineModules.GetFilename import GetFilename
 from mgds.pipelineModules.ImageToVideo import ImageToVideo
 from mgds.pipelineModules.InlineAspectBatchSorting import InlineAspectBatchSorting
 from mgds.pipelineModules.InlineDistributedSampler import InlineDistributedSampler
-from mgds.pipelineModules.LoadImage import LoadImage
 from mgds.pipelineModules.LoadMultipleTexts import LoadMultipleTexts
 from mgds.pipelineModules.LoadVideo import LoadVideo
 from mgds.pipelineModules.ModifyPath import ModifyPath
-from mgds.pipelineModules.RandomBrightness import RandomBrightness
 from mgds.pipelineModules.RandomCircularMaskShrink import RandomCircularMaskShrink
-from mgds.pipelineModules.RandomContrast import RandomContrast
 from mgds.pipelineModules.RandomFlip import RandomFlip
-from mgds.pipelineModules.RandomHue import RandomHue
 from mgds.pipelineModules.RandomLatentMaskRemove import RandomLatentMaskRemove
 from mgds.pipelineModules.RandomMaskRotateCrop import RandomMaskRotateCrop
 from mgds.pipelineModules.RandomRotate import RandomRotate
-from mgds.pipelineModules.RandomSaturation import RandomSaturation
 from mgds.pipelineModules.ScaleCropImage import ScaleCropImage
 from mgds.pipelineModules.SelectFirstInput import SelectFirstInput
 from mgds.pipelineModules.SelectInput import SelectInput
@@ -91,8 +88,9 @@ class DataLoaderText2ImageMixin(metaclass=ABCMeta):
             config: TrainConfig,
             train_dtype: DataType,
             vae_frame_dim: bool = False,
+            image_channels: int = 3,
     ) -> list:
-        load_image = LoadImage(path_in_name='image_path', image_out_name='image', range_min=0, range_max=1, supported_extensions=path_util.supported_image_extensions(), dtype=train_dtype.torch_dtype())
+        load_image = LoadImage(path_in_name='image_path', image_out_name='image', range_min=0, range_max=1, channels=image_channels, supported_extensions=path_util.supported_image_extensions(), dtype=train_dtype.torch_dtype())
         load_video = LoadVideo(path_in_name='image_path', target_frame_count_in_name='settings.target_frames', video_out_name='image', range_min=0, range_max=1, target_frame_rate=24, supported_extensions=path_util.supported_video_extensions(), dtype=train_dtype.torch_dtype())
         image_to_video = ImageToVideo(in_name='image', out_name='image')
 
@@ -100,7 +98,7 @@ class DataLoaderText2ImageMixin(metaclass=ABCMeta):
         load_mask = LoadImage(path_in_name='mask_path', image_out_name='mask', range_min=0, range_max=1, channels=1, supported_extensions={".png"}, dtype=train_dtype.torch_dtype())
         mask_to_video = ImageToVideo(in_name='mask', out_name='mask')
 
-        load_cond_image = LoadImage(path_in_name='cond_path', image_out_name='custom_conditioning_image', range_min=0, range_max=1, supported_extensions=path_util.supported_image_extensions(), dtype=train_dtype.torch_dtype())
+        load_cond_image = LoadImage(path_in_name='cond_path', image_out_name='custom_conditioning_image', range_min=0, range_max=1, channels=image_channels, supported_extensions=path_util.supported_image_extensions(), dtype=train_dtype.torch_dtype())
 
         load_sample_prompts = LoadMultipleTexts(path_in_name='sample_prompt_path', texts_out_name='sample_prompts')
         load_concept_prompts = LoadMultipleTexts(path_in_name='concept.text.prompt_path', texts_out_name='concept_prompts')
@@ -331,9 +329,13 @@ class DataLoaderText2ImageMixin(metaclass=ABCMeta):
             config: TrainConfig,
             text_caching: bool,
             before_cache_image_fun: Callable[[], None] | None = None,
+            cache_namespace: str | None = None,
     ):
         image_cache_dir = os.path.join(config.cache_dir, "image")
         text_cache_dir = os.path.join(config.cache_dir, "text")
+        if cache_namespace:
+            image_cache_dir = os.path.join(image_cache_dir, cache_namespace)
+            text_cache_dir = os.path.join(text_cache_dir, cache_namespace)
 
         if before_cache_image_fun is None:
             def prepare_vae():
@@ -386,7 +388,9 @@ class DataLoaderText2ImageMixin(metaclass=ABCMeta):
             supports_inpainting: bool=True, #TODO many models probably don't support inpainting, but this has been enabled in most dataloaders before refactoring, too
     ):
         enumerate_input = self._enumerate_input_modules(config, allow_videos=allow_video_files)
-        load_input = self._load_input_modules(config, model.train_dtype, vae_frame_dim=vae_frame_dim)
+        load_input = self._load_input_modules(
+            config, model.train_dtype, vae_frame_dim=vae_frame_dim, image_channels=model.image_channels,
+        )
         mask_augmentation = self._mask_augmentation_modules(config)
         aspect_bucketing_in = self._aspect_bucketing_in(config, aspect_bucketing_quantization, frame_dim_enabled)
         crop_modules = self._crop_modules(config)

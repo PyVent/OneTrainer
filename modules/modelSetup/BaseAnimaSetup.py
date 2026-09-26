@@ -72,6 +72,8 @@ class BaseAnimaSetup(
                 rand=rand,
                 tokens=batch.get("tokens"),
                 tokens_mask=batch.get("tokens_mask"),
+                t5_tokens=batch.get("t5_tokens"),
+                t5_tokens_mask=batch.get("t5_tokens_mask"),
                 text_encoder_output=batch['text_encoder_hidden_state'] \
                     if 'text_encoder_hidden_state' in batch and not config.train_text_encoder_or_embedding() else None,
                 text_encoder_dropout_probability=config.text_encoder.dropout_probability if not deterministic else None,
@@ -98,11 +100,12 @@ class BaseAnimaSetup(
                 model.noise_scheduler.timesteps,
             )
 
-            # Anima latents are 5D (B,16,1,H/8,W/8) — no pack/unpack needed.
+            # Both Anima variants use 5D latents (B,C,1,H/scale,W/scale).
             # CosmosTransformer3DModel requires padding_mask in pixel space (1,1,H,W).
             latent_h, latent_w = scaled_noisy_latent_image.shape[-2], scaled_noisy_latent_image.shape[-1]
+            vae_scale_factor = model.vae.spatial_compression_ratio
             padding_mask = scaled_noisy_latent_image.new_zeros(
-                1, 1, latent_h * 8, latent_w * 8,
+                1, 1, latent_h * vae_scale_factor, latent_w * vae_scale_factor,
             ).to(dtype=model.train_dtype.torch_dtype())
 
             predicted_flow = model.transformer(

@@ -1,6 +1,6 @@
-import os
-import traceback
+import math
 
+from modules.model.anima.custom_vae import AutoencoderKLQwenImage21
 from modules.model.AnimaModel import AnimaModel
 from modules.modelLoader.GenericFineTuneModelLoader import make_fine_tune_model_loader
 from modules.modelLoader.GenericLoRAModelLoader import make_lora_model_loader
@@ -29,23 +29,6 @@ class AnimaModelLoader(
     def __init__(self):
         super().__init__()
 
-    def __load_internal(
-            self,
-            model: AnimaModel,
-            model_type: ModelType,
-            weight_dtypes: ModelWeightDtypes,
-            base_model_name: str,
-            transformer_model_name: str,
-            vae_model_name: str,
-            quantization: QuantizationConfig,
-    ):
-        if os.path.isfile(os.path.join(base_model_name, "meta.json")):
-            self.__load_diffusers(
-                model, model_type, weight_dtypes, base_model_name, transformer_model_name, vae_model_name, quantization,
-            )
-        else:
-            raise Exception("not an internal model")
-
     def __load_diffusers(
             self,
             model: AnimaModel,
@@ -56,6 +39,22 @@ class AnimaModelLoader(
             vae_model_name: str,
             quantization: QuantizationConfig,
     ):
+        vae_type = AutoencoderKLQwenImage21 if model_type == ModelType.ANIMA_QWEN21_VAE else AutoencoderKLQwenImage
+        vae_config = vae_type.load_config(
+            vae_model_name or base_model_name, subfolder=None if vae_model_name else "vae",
+        )
+        declared_class = vae_config.get("_class_name")
+        if declared_class and declared_class != vae_type.__name__:
+            raise ValueError(
+                f"{model_type} requires {vae_type.__name__}, but the selected VAE is {declared_class}. "
+                "Select the matching Anima model type and checkpoint."
+            )
+        image_channels = vae_config.get("in_channels", 4) if model_type == ModelType.ANIMA_QWEN21_VAE \
+            else vae_config.get("input_channels", 3)
+        allowed_channels = (3, 4) if model_type == ModelType.ANIMA_QWEN21_VAE else (3,)
+        if image_channels not in allowed_channels or vae_config.get("out_channels", image_channels) != image_channels:
+            raise ValueError(f"Unsupported Anima VAE image channels: {image_channels}; input and output must match")
+
         tokenizer = Qwen2Tokenizer.from_pretrained(
             base_model_name,
             subfolder="tokenizer",
@@ -88,14 +87,14 @@ class AnimaModelLoader(
 
         if vae_model_name: #TODO simplify
             vae = self._load_diffusers_sub_module(
-                AutoencoderKLQwenImage,
+                vae_type,
                 weight_dtypes.vae,
                 weight_dtypes.train_dtype,
                 vae_model_name,
             )
         else:
             vae = self._load_diffusers_sub_module(
-                AutoencoderKLQwenImage,
+                vae_type,
                 weight_dtypes.vae,
                 weight_dtypes.train_dtype,
                 base_model_name,
@@ -124,6 +123,21 @@ class AnimaModelLoader(
                 quantization,
             )
 
+        if transformer.config.in_channels != vae.config.z_dim:
+            raise ValueError(
+                f"Anima transformer expects {transformer.config.in_channels} latent channels, "
+                f"but the VAE produces {vae.config.z_dim}"
+            )
+        if transformer.config.out_channels != vae.config.z_dim:
+            raise ValueError(
+                f"Anima transformer produces {transformer.config.out_channels} latent channels, "
+                f"but the VAE expects {vae.config.z_dim}"
+            )
+        if len(vae.config.latents_mean) != vae.config.z_dim or len(vae.config.latents_std) != vae.config.z_dim \
+                or not all(math.isfinite(x) for x in vae.config.latents_mean) \
+                or not all(math.isfinite(x) and x > 0 for x in vae.config.latents_std):
+            raise ValueError("Anima VAE latent normalization must provide a finite mean and positive std per channel")
+
         model.model_type = model_type
         model.tokenizer = tokenizer
         model.t5_tokenizer = t5_tokenizer
@@ -141,27 +155,14 @@ class AnimaModelLoader(
             weight_dtypes: ModelWeightDtypes,
             quantization: QuantizationConfig,
     ):
-        stacktraces = []
-
-        try:
-            self.__load_internal(
-                model, model_type, weight_dtypes, model_names.base_model, model_names.transformer_model, model_names.vae_model, quantization,
-            )
-            return
-        except Exception:
-            stacktraces.append(traceback.format_exc())
-
+        # Internal backups also store Diffusers components; the generic loader restores training metadata.
         try:
             self.__load_diffusers(
                 model, model_type, weight_dtypes, model_names.base_model, model_names.transformer_model, model_names.vae_model, quantization,
             )
             return
-        except Exception:
-            stacktraces.append(traceback.format_exc())
-
-        for stacktrace in stacktraces:
-            print(stacktrace)
-        raise Exception("could not load model: " + model_names.base_model)
+        except Exception as exc:
+            raise RuntimeError(f"could not load model: {model_names.base_model}: {exc}") from exc
 
 
 class AnimaLoRALoader(
@@ -179,7 +180,10 @@ class AnimaLoRALoader(
 
 
 AnimaLoRAModelLoader = make_lora_model_loader(
-    model_spec_map={ModelType.ANIMA: "resources/sd_model_spec/anima-lora.json"},
+    model_spec_map={
+        ModelType.ANIMA: "resources/sd_model_spec/anima-lora.json",
+        ModelType.ANIMA_QWEN21_VAE: "resources/sd_model_spec/anima-qwen21-vae-lora.json",
+    },
     model_class=AnimaModel,
     model_loader_class=AnimaModelLoader,
     embedding_loader_class=None,
@@ -187,7 +191,10 @@ AnimaLoRAModelLoader = make_lora_model_loader(
 )
 
 AnimaFineTuneModelLoader = make_fine_tune_model_loader(
-    model_spec_map={ModelType.ANIMA: "resources/sd_model_spec/anima.json"},
+    model_spec_map={
+        ModelType.ANIMA: "resources/sd_model_spec/anima.json",
+        ModelType.ANIMA_QWEN21_VAE: "resources/sd_model_spec/anima-qwen21-vae.json",
+    },
     model_class=AnimaModel,
     model_loader_class=AnimaModelLoader,
     embedding_loader_class=None,

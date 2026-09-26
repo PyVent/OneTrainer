@@ -9,6 +9,7 @@ from modules.util.enum.AudioFormat import AudioFormat
 from modules.util.enum.FileType import FileType
 from modules.util.enum.ImageFormat import ImageFormat
 from modules.util.enum.VideoFormat import VideoFormat
+from modules.util.image_util import composite_on_white, has_alpha
 
 import torch
 
@@ -30,12 +31,12 @@ class ModelSamplerOutput:
         else:
             self.data = data
 
-    #Reduce to a JPEG bytestream for cloud training:
+    # Cloud previews use PNG when alpha must be preserved; RGB retains JPEG compression.
     def __reduce__(self):
         match self.file_type:
             case FileType.IMAGE:
                 b = io.BytesIO()
-                self.data.save(b, format='JPEG')
+                self.data.save(b, format='PNG' if has_alpha(self.data) else 'JPEG')
                 return ModelSamplerOutput, (self.file_type, b.getvalue())
             case FileType.VIDEO:
                 #do not transfer videos; they are not shown anyway
@@ -92,6 +93,8 @@ class BaseModelSampler(metaclass=ABCMeta):
             if image_format is None:
                 raise ValueError("Image format required for sampling an image")
             image = sampler_output.data
+            if image_format == ImageFormat.JPG and has_alpha(image):
+                image = composite_on_white(image)
             image.save(destination + image_format.extension(), format=image_format.pil_format())
         elif sampler_output.file_type == FileType.VIDEO:
             if video_format is None:

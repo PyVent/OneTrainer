@@ -1,10 +1,14 @@
+import json
 import os.path
+import shutil
 from pathlib import Path
 
+from modules.model.anima import custom_vae, pipeline_anima21
 from modules.model.AnimaModel import AnimaModel
 from modules.modelSaver.mixin.DtypeModelSaverMixin import DtypeModelSaverMixin
 from modules.util.convert_util import convert
 from modules.util.enum.ModelFormat import ModelFormat
+from modules.util.enum.ModelType import ModelType
 
 import torch
 
@@ -26,10 +30,24 @@ class AnimaModelSaver(
         # Copy the model to cpu by first moving the original model to cpu. This preserves some VRAM.
         pipeline = model.create_pipeline()
         pipeline.to("cpu")
-        save_pipeline = self._copy_pipeline_to_dtype(pipeline, dtype, pipeline.tokenizer)
+        save_pipeline = self._copy_pipeline_to_dtype(pipeline, dtype, pipeline.tokenizer, pipeline.t5_tokenizer)
 
         os.makedirs(Path(destination).absolute(), exist_ok=True)
         save_pipeline.save_pretrained(destination)
+
+        if model.model_type == ModelType.ANIMA_QWEN21_VAE:
+            # Diffusers needs these modules beside model_index.json to load the saved pipeline elsewhere.
+            shutil.copyfile(custom_vae.__file__, os.path.join(destination, "custom_vae.py"))
+            shutil.copyfile(custom_vae.__file__, os.path.join(destination, "vae", "custom_vae.py"))
+            shutil.copyfile(pipeline_anima21.__file__, os.path.join(destination, "pipeline_anima21.py"))
+            index_path = os.path.join(destination, "model_index.json")
+            with open(index_path, encoding="utf-8") as handle:
+                index = json.load(handle)
+            index["_class_name"] = ["pipeline_anima21", "Anima21Pipeline"]
+            index["vae"] = ["custom_vae", "AutoencoderKLQwenImage21"]
+            with open(index_path, "w", encoding="utf-8") as handle:
+                json.dump(index, handle, indent=2)
+                handle.write("\n")
 
         if dtype is not None:
             del save_pipeline

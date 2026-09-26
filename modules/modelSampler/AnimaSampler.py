@@ -21,6 +21,7 @@ import numpy as np
 from tqdm import tqdm
 
 
+@factory.register(BaseModelSampler, ModelType.ANIMA_QWEN21_VAE)
 @factory.register(BaseModelSampler, ModelType.ANIMA)
 class AnimaSampler(BaseModelSampler):
     def __init__(
@@ -34,7 +35,7 @@ class AnimaSampler(BaseModelSampler):
 
         self.model = model
         self.model_type = model_type
-        self.image_processor = VaeImageProcessor(vae_scale_factor=8)
+        self.image_processor = VaeImageProcessor(vae_scale_factor=model.vae.spatial_compression_ratio)
 
     @torch.no_grad()
     def __sample_base(
@@ -61,8 +62,8 @@ class AnimaSampler(BaseModelSampler):
 
             transformer = self.model.transformer
             vae = self.model.vae
-            vae_scale_factor = 8
-            num_latent_channels = 16
+            vae_scale_factor = vae.spatial_compression_ratio
+            num_latent_channels = vae.config.z_dim
 
             # prepare prompt
             self.model.materialize_only("text_encoder")

@@ -41,6 +41,7 @@ class TopBarController:
             ("Chroma1", ModelType.CHROMA_1),
             ("QwenImage", ModelType.QWEN),
             ("Anima", ModelType.ANIMA),
+            ("Anima (qwen 2.1 vae)", ModelType.ANIMA_QWEN21_VAE),
             ("Krea 2", ModelType.KREA_2),
             ("Z-Image", ModelType.Z_IMAGE),
             ("Ernie Image", ModelType.ERNIE),
