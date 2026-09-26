@@ -32,6 +32,14 @@ class ConvertModelUIController:
         self.view = view_cls(parent, self)
         return self.view
 
+    def get_training_methods(self) -> list[tuple[str, TrainingMethod]]:
+        labels = {
+            TrainingMethod.FINE_TUNE: "Base Model",
+            TrainingMethod.LORA: "LoRA",
+            TrainingMethod.EMBEDDING: "Embedding",
+        }
+        return [(labels[method], method) for method in self.convert_model_args.supported_training_methods()]
+
     def get_output_formats(self) -> list[tuple[str, ModelFormat]]:
         labels = {
             ModelFormat.SAFETENSORS: "Safetensors",
@@ -52,6 +60,7 @@ class ConvertModelUIController:
     def perform_conversion(self):
         """Convert a model without touching any GUI widget."""
         try:
+            self.convert_model_args.validate()
             model_loader = create.create_model_loader(
                 model_type=self.convert_model_args.model_type,
                 training_method=self.convert_model_args.training_method
@@ -60,6 +69,9 @@ class ConvertModelUIController:
                 model_type=self.convert_model_args.model_type,
                 training_method=self.convert_model_args.training_method
             )
+
+            if model_loader is None or model_saver is None:
+                raise ValueError("The selected model conversion has no registered loader or saver")
 
             huggingface_util.configure_hub(self.convert_model_args.huggingface_token)
 

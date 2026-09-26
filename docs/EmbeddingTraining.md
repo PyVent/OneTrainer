@@ -23,3 +23,11 @@ If you select "Embedding" as your training method, a new tab called "embedding" 
   more of the available tokens in each prompt when generating an image.
 - Initial embedding text: The text to use when initializing a new embedding. Choosing a good text can significantly
   speed up training.
+
+### Exporting multiple embeddings
+
+Additional embeddings use their placeholders as sanitized filenames. For example,
+`<style one>` and `<style_one>` both become `style_one.safetensors`. An export with
+colliding names, including case-only differences, fails before writing any of its
+embedding files. Give the placeholders distinct names and export again. Internal
+backups use embedding UUIDs, so colliding placeholder names do not affect them.

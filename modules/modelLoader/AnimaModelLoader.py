@@ -156,6 +156,7 @@ class AnimaModelLoader(
             quantization: QuantizationConfig,
     ):
         # Internal backups also store Diffusers components; the generic loader restores training metadata.
+        model.empty_text_encoder_output = None
         try:
             self.__load_diffusers(
                 model, model_type, weight_dtypes, model_names.base_model, model_names.transformer_model, model_names.vae_model, quantization,

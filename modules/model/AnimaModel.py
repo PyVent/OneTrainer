@@ -72,6 +72,7 @@ class AnimaModel(BaseModel):
 
         self.transformer_lora = None
         self.lora_state_dict = None
+        self.empty_text_encoder_output: Tensor | None = None
 
     def _diffusers_to_dit(self) -> list:
         # the netless diffusers CosmosTransformer3DModel -> Anima DiT rename (the inverse of diffusers'
@@ -189,6 +190,8 @@ class AnimaModel(BaseModel):
     ) -> Tensor:
         # Two-stage encoding: Qwen3 text encoder → AnimaTextConditioner (with T5 token ids as queries).
         # text_encoder_output, when provided from cache, is already the conditioner output.
+        if text_encoder_dropout_probability is not None and not 0.0 <= text_encoder_dropout_probability <= 1.0:
+            raise ValueError("Text encoder dropout probability must be between 0 and 1")
         if tokens is None and text is not None:
             if isinstance(text, str):
                 text = [text]
@@ -232,11 +235,27 @@ class AnimaModel(BaseModel):
                 )
 
         if text_encoder_dropout_probability is not None and text_encoder_dropout_probability > 0.0:
-            raise NotImplementedError  # https://github.com/Nerogar/OneTrainer/issues/957
+            rand = rand if rand is not None else Random()
+            drop = torch.tensor(
+                [rand.random() < text_encoder_dropout_probability for _ in range(text_encoder_output.shape[0])],
+                device=text_encoder_output.device, dtype=torch.bool,
+            )
+            self.prepare_text_dropout()
+            empty = self.empty_text_encoder_output[:, :text_encoder_output.shape[1]].to(text_encoder_output)
+            # Use the same empty-prompt conditioning as CFG sampling, without
+            # changing cached positive embeddings in place.
+            text_encoder_output = torch.where(drop[:, None, None], empty, text_encoder_output)
 
         # conditioner output is always (B, 512, 1024) and fully dense (zeros for padding positions);
         # the Cosmos transformer takes encoder_hidden_states with no separate text attention mask.
         return text_encoder_output
+
+    @torch.no_grad()
+    def prepare_text_dropout(self):
+        if self.empty_text_encoder_output is None:
+            self.empty_text_encoder_output = self.encode_text(
+                train_device=self.text_encoder.device, text="",
+            ).detach().cpu()
 
     def scale_latents(self, latents: Tensor) -> Tensor:
         latents_mean = torch.tensor(self.vae.config.latents_mean, device=latents.device, dtype=latents.dtype).view(1, self.vae.config.z_dim, 1, 1, 1)

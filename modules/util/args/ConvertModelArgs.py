@@ -26,6 +26,25 @@ class ConvertModelArgs(BaseArgs):
     def weight_dtypes(self) -> ModelWeightDtypes:
         return ModelWeightDtypes.from_single_dtype(self.output_dtype)
 
+    def supported_training_methods(self) -> tuple[TrainingMethod, ...]:
+        return tuple(
+            method for method in self.model_type.supported_training_methods()
+            if method in (TrainingMethod.FINE_TUNE, TrainingMethod.LORA, TrainingMethod.EMBEDDING)
+        )
+
+    def validate(self):
+        if self.training_method not in self.supported_training_methods():
+            raise ValueError(f"{self.model_type} does not support {self.training_method} conversion")
+        formats = self.model_type.supported_output_formats(self.training_method)
+        if self.output_model_format not in [*formats, ModelFormat.INTERNAL]:
+            raise ValueError(
+                f"Unsupported output format {self.output_model_format} for {self.model_type} / {self.training_method}"
+            )
+        if not self.input_name.strip():
+            raise ValueError("Input name is required for model conversion")
+        if not self.output_model_destination.strip():
+            raise ValueError("Model output destination is required for model conversion")
+
     def model_names(self) -> ModelNames:
         return ModelNames(
             base_model=self.input_name,

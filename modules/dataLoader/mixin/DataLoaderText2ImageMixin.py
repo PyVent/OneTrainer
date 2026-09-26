@@ -415,10 +415,9 @@ class DataLoaderText2ImageMixin(metaclass=ABCMeta):
             ] + ([inpainting_modules] if supports_inpainting else []) + [
                 preparation_modules,
                 cache_modules,
-                output_modules,
-
                 debug_modules if config.debug_mode else None,
-                # inserted before output_modules, which contains a sorting operation
+                # Debug modules need random access before serial batch sorting.
+                output_modules,
             ],
             train_progress,
             is_validation

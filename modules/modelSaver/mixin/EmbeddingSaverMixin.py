@@ -79,6 +79,8 @@ class EmbeddingSaverMixin:
         if model.embedding is not None:
             embedding_uuids.discard(self._primary_embedding(model.embedding).uuid)
 
+        exports = []
+        filenames = {}
         for embedding_uuid in sorted(embedding_uuids):
             embedding = embeddings.get(embedding_uuid)
             embedding_state = model.embedding_state_dicts.get(embedding_uuid)
@@ -89,8 +91,22 @@ class EmbeddingSaverMixin:
             if output_model_format == ModelFormat.SAFETENSORS:
                 name = self._primary_embedding(embedding).placeholder if embedding is not None else embedding_uuid
                 name = safe_filename(name, allow_spaces=False, max_length=None)
+                if not name:
+                    raise ValueError(f"Embedding {embedding_uuid} has an empty filename after sanitizing its placeholder")
+                # Exports must also be distinct on case-insensitive filesystems.
+                key = name.casefold()
+                if key in filenames:
+                    raise ValueError(
+                        f"Embeddings {filenames[key]} and {embedding_uuid} both export to {name}.safetensors. "
+                        "Choose distinct placeholders before saving."
+                    )
+                filenames[key] = embedding_uuid
                 destination = os.path.join(f"{destination}_embeddings", f"{name}.safetensors")
 
+            exports.append((embedding, embedding_state, embedding_uuid, destination))
+
+        # Validate the entire batch before creating or replacing any files.
+        for embedding, embedding_state, embedding_uuid, destination in exports:
             self._save_embedding(
                 embedding, embedding_state, embedding_uuid, output_model_format, destination, dtype,
             )

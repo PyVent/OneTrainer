@@ -34,6 +34,7 @@ built - the perturbation of the model is ~1e-6 in spectral norm, and the first
 retraction turns the subspaces into the top-r directions of the gradient.
 """
 import math
+import warnings
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
@@ -172,6 +173,17 @@ class RiemannionOT(RiemannionFast):
             with torch.enable_grad():
                 loss = closure()
 
+        gradients = [p.grad for group in self.param_groups for p in group["params"] if p.grad is not None]
+        if gradients:
+            finite = torch.stack([torch.isfinite(g).all().to(gradients[0].device) for g in gradients])
+            if not finite.all():
+                warnings.warn(
+                    "Riemannion skipped an optimizer step because gradients contain NaN or Inf; "
+                    "parameters and optimizer state were not updated. Check loss scaling and learning rate.",
+                    RuntimeWarning, stacklevel=2,
+                )
+                return loss
+
         self._attach_flat_grads()
         try:
             if self._can_batch():
@@ -251,12 +263,14 @@ class RiemannionOT(RiemannionFast):
         # while the optimizer state is loaded, not the training device.
         super(RiemannionFast, self).load_state_dict(state_dict)
 
-        # torch casts floating point states to the parameter dtype - the whole
-        # geometry has to stay fp32 regardless of the LoRA weight dtype.
-        for state in self.state.values():
-            for key, value in state.items():
-                if torch.is_tensor(value) and value.is_floating_point() and value.dtype != torch.float32:
-                    state[key] = value.float()
+        # torch casts states to the parameter dtype. Restore from the original
+        # checkpoint, since casting the rounded bf16/fp16 states back to fp32
+        # cannot recover the geometry or momentum's lost precision.
+        for saved_group, group in zip(state_dict["param_groups"], self.param_groups, strict=True):
+            for saved_id, param in zip(saved_group["params"], group["params"], strict=True):
+                for key, value in state_dict["state"].get(saved_id, {}).items():
+                    if torch.is_tensor(value) and value.is_floating_point():
+                        self.state[param][key] = value.to(device=param.device, dtype=torch.float32)
 
         self._rekey_state(to_params=False)
         self._buckets = None

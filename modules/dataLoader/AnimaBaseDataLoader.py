@@ -3,6 +3,7 @@ import os
 from modules.dataLoader.BaseDataLoader import BaseDataLoader
 from modules.dataLoader.EncodeAnimaVAE import EncodeAnimaVAE
 from modules.dataLoader.mixin.DataLoaderText2ImageMixin import DataLoaderText2ImageMixin
+from modules.dataLoader.SaveAnimaDebug import SaveAnimaDebug
 from modules.model.AnimaModel import PROMPT_MAX_LENGTH, AnimaModel
 from modules.model.BaseModel import BaseModel
 from modules.modelSetup.BaseAnimaSetup import BaseAnimaSetup
@@ -12,13 +13,9 @@ from modules.util.config.TrainConfig import TrainConfig
 from modules.util.enum.ModelType import ModelType
 from modules.util.TrainProgress import TrainProgress
 
-from mgds.pipelineModules.DecodeTokens import DecodeTokens
-from mgds.pipelineModules.DecodeVAE import DecodeVAE
 from mgds.pipelineModules.EncodeAnimaText import EncodeAnimaText
 from mgds.pipelineModules.RescaleImageChannels import RescaleImageChannels
 from mgds.pipelineModules.SampleVAEDistribution import SampleVAEDistribution
-from mgds.pipelineModules.SaveImage import SaveImage
-from mgds.pipelineModules.SaveText import SaveText
 from mgds.pipelineModules.ScaleImage import ScaleImage
 from mgds.pipelineModules.Tokenize import Tokenize
 
@@ -110,38 +107,11 @@ class AnimaBaseDataLoader(
             train_dtype=model.train_dtype,
         )
 
-    def _debug_modules(self, config: TrainConfig, model: AnimaModel): #TODO clean up
-        debug_dir = os.path.join(config.debug_dir, "dataloader")
-
-        def before_save_fun():
-            model.materialize("vae")
-
-        decode_image = DecodeVAE(in_name='latent_image', out_name='decoded_image', vae=model.vae, autocast_contexts=[model.autocast_context], dtype=model.train_dtype.torch_dtype())
-        upscale_mask = ScaleImage(in_name='latent_mask', out_name='decoded_mask', factor=model.vae.spatial_compression_ratio)
-        decode_prompt = DecodeTokens(in_name='tokens', out_name='decoded_prompt', tokenizer=model.tokenizer)
-
-        #FIXME https://github.com/Nerogar/OneTrainer/issues/1015
-        #save_image = SaveImage(image_in_name='decoded_image', original_path_in_name='image_path', path=debug_dir, in_range_min=-1, in_range_max=1, before_save_fun=before_save_fun)
-
-        # SaveImage(image_in_name='latent_mask', original_path_in_name='image_path', path=debug_dir, in_range_min=0, in_range_max=1, before_save_fun=before_save_fun)
-        save_mask = SaveImage(image_in_name='decoded_mask', original_path_in_name='image_path', path=debug_dir, in_range_min=0, in_range_max=1, before_save_fun=before_save_fun)
-        save_prompt = SaveText(text_in_name='decoded_prompt', original_path_in_name='image_path', path=debug_dir, before_save_fun=before_save_fun)
-
-        # These modules don't really work, since they are inserted after a sorting operation that does not include this data
-        # SaveImage(image_in_name='mask', original_path_in_name='image_path', path=debug_dir, in_range_min=0, in_range_max=1),
-        # SaveImage(image_in_name='image', original_path_in_name='image_path', path=debug_dir, in_range_min=-1, in_range_max=1),
-
-        modules = [decode_image]
-
-        #FIXME https://github.com/Nerogar/OneTrainer/issues/1015
-        #modules.append(save_image)
-
-        if config.masked_training or config.model_type.has_mask_input():
-            modules += [upscale_mask, save_mask]
-
-        modules += [decode_prompt, save_prompt]
-
-        return modules
+    def _debug_modules(self, config: TrainConfig, model: AnimaModel):
+        return [SaveAnimaDebug(
+            model, os.path.join(config.debug_dir, "dataloader"),
+            masked=config.masked_training or config.model_type.has_mask_input(),
+        )]
 
     def _create_dataset(
             self,

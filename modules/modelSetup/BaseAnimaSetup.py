@@ -157,3 +157,9 @@ class BaseAnimaSetup(
 
         model.eval()
         torch_gc()
+
+    def _prepare_text_dropout(self, model: AnimaModel, config: TrainConfig):
+        if config.text_encoder.dropout_probability > 0 and model.empty_text_encoder_output is None:
+            model.materialize_only("text_encoder")
+            model.eval()
+            model.prepare_text_dropout()

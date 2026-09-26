@@ -13,11 +13,15 @@ from modules.util.ModelNames import EmbeddingName, ModelNames
 
 def main():
     args = ConvertModelArgs.parse_args()
+    args.validate()
 
     huggingface_util.configure_hub(args.huggingface_token)
 
     model_loader = create.create_model_loader(model_type=args.model_type, training_method=args.training_method)
     model_saver = create.create_model_saver(model_type=args.model_type, training_method=args.training_method)
+
+    if model_loader is None or model_saver is None:
+        raise ValueError("The selected model conversion has no registered loader or saver")
 
     print("Loading model " + args.input_name)
     if args.training_method in [TrainingMethod.FINE_TUNE]:
