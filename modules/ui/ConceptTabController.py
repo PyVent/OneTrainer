@@ -9,7 +9,10 @@ class ConceptTabController:
         self.train_config = config
 
     def create_new_element(self) -> ConceptConfig:
-        return ConceptConfig.default_values()
+        concept = ConceptConfig.default_values()
+        concept.text.caption_mode = "all"
+        concept.text.caption_format = "auto"
+        return concept
 
     def randomize_seed(self, concept: ConceptConfig) -> ConceptConfig:
         concept.seed = ConceptConfig.default_values().seed

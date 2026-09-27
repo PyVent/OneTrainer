@@ -1,13 +1,14 @@
+import copy
 import os
 import pathlib
-import platform
-import random
 import threading
 import time
 import traceback
 
+from modules.dataLoader.CaptionAugmentations import CapitalizeTags, DropTags, ShuffleTags
 from modules.dataLoader.RGBAImageAugmentations import RandomBrightness, RandomContrast, RandomHue, RandomSaturation
 from modules.util import concept_stats, huggingface_util, path_util
+from modules.util.caption_util import caption_format, load_captions
 from modules.util.config.ConceptConfig import ConceptConfig
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.enum.ModelType import ModelType
@@ -16,15 +17,12 @@ from modules.util.image_util import load_image
 from mgds.LoadingPipeline import LoadingPipeline
 from mgds.OutputPipelineModule import OutputPipelineModule
 from mgds.PipelineModule import PipelineModule
-from mgds.pipelineModules.CapitalizeTags import CapitalizeTags
-from mgds.pipelineModules.DropTags import DropTags
 from mgds.pipelineModules.RandomCircularMaskShrink import (
     RandomCircularMaskShrink,
 )
 from mgds.pipelineModules.RandomFlip import RandomFlip
 from mgds.pipelineModules.RandomMaskRotateCrop import RandomMaskRotateCrop
 from mgds.pipelineModules.RandomRotate import RandomRotate
-from mgds.pipelineModules.ShuffleTags import ShuffleTags
 from mgds.pipelineModuleTypes.RandomAccessPipelineModule import RandomAccessPipelineModule
 
 import torch
@@ -40,6 +38,16 @@ class ConceptWindowController:
         self.concept = concept
         self.cancel_scan_flag = threading.Event()
         self.scan_thread = None
+        self.preview_caption_index = 0
+        self.preview_captions = []
+        self.preview_seed = 0
+        self.preview_error = ""
+        self.preview_is_placeholder = True
+        self.preview_cancel_flag = threading.Event()
+        self._preview_paths_key = None
+        self._preview_paths = []
+        self._preview_iterator = None
+        self._preview_exhausted = False
 
     @staticmethod
     def get_concept_path(path: str) -> str | None:
@@ -66,45 +74,52 @@ class ConceptWindowController:
         download_thread = threading.Thread(target=self.download_dataset, daemon=True)
         download_thread.start()
 
-    def _read_text_file_for_preview(self, file_path: str, preview_augmentations: bool) -> str:
-        empty_msg = "[Empty prompt]"
-        try:
-            with open(file_path, "r") as f:
-                if preview_augmentations:
-                    lines = [line.strip() for line in f if line.strip()]
-                    return random.choice(lines) if lines else empty_msg
-                content = f.read().strip()
-                return content if content else empty_msg
-        except FileNotFoundError:
-            return "File not found, please check the path"
-        except IsADirectoryError:
-            return "[Provided path is a directory, please correct the caption path]"
-        except PermissionError:
-            if platform.system() == "Windows":
-                return "[Permission denied, please check the file permissions or Windows Defender settings]"
+    @staticmethod
+    def _iter_preview_paths(path, include_subdirectories, cancel_flag=None):
+        directories = [path] if path else []
+        for directory in directories:
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    if cancel_flag is not None and cancel_flag.is_set():
+                        return
+                    if entry.is_file():
+                        stem, extension = os.path.splitext(entry.name)
+                        if path_util.is_supported_image_extension(extension) and not stem.endswith(("-masklabel", "-condlabel")):
+                            yield pathlib.Path(entry.path)
+                    elif include_subdirectories and entry.is_dir(follow_symlinks=False) and not entry.name.startswith("."):
+                        directories.append(entry.path)
+
+    def close_preview(self):
+        if self._preview_iterator is not None:
+            self._preview_iterator.close()
+            self._preview_iterator = None
+
+    def preview_paths(self, required_index=0):
+        key = (self.concept.path, self.concept.include_subdirectories)
+        if key != self._preview_paths_key:
+            self.close_preview()
+            concept_path = self.get_concept_path(self.concept.path)
+            self._preview_paths = []
+            self._preview_iterator = self._iter_preview_paths(concept_path, self.concept.include_subdirectories, self.preview_cancel_flag)
+            self._preview_exhausted = False
+            self._preview_paths_key = key
+        # Keep only the paths the user has visited. Do not scan or sort the whole
+        # dataset just to show its first image.
+        while len(self._preview_paths) <= required_index and not self._preview_exhausted:
+            path = next(self._preview_iterator, None)
+            if path is None:
+                self._preview_exhausted = True
+                self.close_preview()
             else:
-                return "[Permission denied, please check the file permissions]"
-        except UnicodeDecodeError:
-            return "[Invalid file encoding. This should not happen, please report this issue]"
+                self._preview_paths.append(path)
+        return self._preview_paths
 
     def get_preview_image(self, image_preview_file_index: int, preview_augmentations: bool):
         preview_image_path = str(pathlib.Path(__file__).resolve().parents[2] / "resources" / "icons" / "icon.png")
         placeholder_path = preview_image_path
-        file_index = -1
-        glob_pattern = "**/*.*" if self.concept.include_subdirectories else "*.*"
-
-        concept_path = self.get_concept_path(self.concept.path)
-        if concept_path:
-            for path in pathlib.Path(concept_path).glob(glob_pattern):
-                if any(part.startswith('.') for part in path.relative_to(concept_path).parent.parts):
-                    continue
-                extension = os.path.splitext(path)[1]
-                if path.is_file() and path_util.is_supported_image_extension(extension) \
-                        and not path.name.endswith("-masklabel.png") and not path.name.endswith("-condlabel.png"):
-                    preview_image_path = path_util.canonical_join(concept_path, path)
-                    file_index += 1
-                    if file_index == image_preview_file_index:
-                        break
+        paths = self.preview_paths(image_preview_file_index)
+        if paths:
+            preview_image_path = str(paths[image_preview_file_index % len(paths)])
 
         self.preview_is_placeholder = preview_image_path == placeholder_path
         image_mode = "RGBA" if self.train_config.model_type == ModelType.ANIMA_QWEN21_VAE else "RGB"
@@ -117,22 +132,20 @@ class ConceptWindowController:
             preview_mask_path = None
 
         if preview_mask_path:
-            mask = Image.open(preview_mask_path).convert("L")
-            mask_tensor = functional.to_tensor(mask)
+            with Image.open(preview_mask_path) as mask:
+                mask_tensor = functional.to_tensor(mask.convert("L"))
         else:
             mask_tensor = torch.ones((1, image_tensor.shape[1], image_tensor.shape[2]))
 
-        source = self.concept.text.prompt_source
-        preview_p = pathlib.Path(preview_image_path)
-        if source == "filename":
-            prompt_output = preview_p.stem or "[Empty prompt]"
-        else:
-            file_map = {
-                "sample": preview_p.with_suffix(".txt"),
-                "concept": pathlib.Path(self.concept.text.prompt_path) if self.concept.text.prompt_path else None,
-            }
-            file_path = file_map.get(source)
-            prompt_output = self._read_text_file_for_preview(str(file_path), preview_augmentations) if file_path else "[Empty prompt]"
+        text_settings = self.concept.text.to_dict()
+        self.preview_error = ""
+        try:
+            self.preview_captions = load_captions(preview_image_path, text_settings) if not self.preview_is_placeholder else []
+        except (OSError, ValueError) as exc:
+            self.preview_captions = []
+            self.preview_error = str(exc)
+        self.preview_caption_index = min(self.preview_caption_index, max(0, len(self.preview_captions) - 1))
+        prompt_output = self.preview_captions[self.preview_caption_index] if self.preview_captions else ""
 
         modules = []
         if preview_augmentations and not self.preview_is_placeholder:
@@ -161,6 +174,7 @@ class ConceptWindowController:
                 'enable_random_mask_rotate_crop': self.concept.image.enable_random_mask_rotate_crop,
 
                 'prompt' : prompt_output,
+                'caption_is_tags': caption_format(prompt_output, text_settings) == 'tags',
                 'tag_dropout_enable' : self.concept.text.tag_dropout_enable,
                 'tag_dropout_probability' : self.concept.text.tag_dropout_probability,
                 'tag_dropout_mode' : self.concept.text.tag_dropout_mode,
@@ -212,7 +226,7 @@ class ConceptWindowController:
                 device=torch.device('cpu'),
                 modules=modules,
                 batch_size=1,
-                seed=random.randint(0, 2**30),
+                seed=hash((self.concept.seed, image_preview_file_index, self.preview_caption_index, self.preview_seed)),
                 state=None,
                 initial_epoch=0,
                 initial_index=0,
@@ -240,48 +254,53 @@ class ConceptWindowController:
     def get_concept_stats(self, view, advanced_checks: bool, wait_time: float):
         start_time = time.perf_counter()
         last_update = time.perf_counter()
-        self.cancel_scan_flag.clear()
-        view.components.call_after(view.concept_stats_tab, 0, view._disable_scan_buttons)
-        concept_path = self.get_concept_path(self.concept.path)
+        concept = copy.deepcopy(self.concept)
 
-        if not concept_path:
-           print(f"Unable to get statistics for concept path: {self.concept.path}")
-           view.components.call_after(view.concept_stats_tab, 0, view._enable_scan_buttons)
-           return
-        subfolders = [concept_path]
+        def publish(stats):
+            if not view._closed:
+                self.concept.concept_stats = stats
+                view._update_concept_stats(self)
 
-        stats_dict = concept_stats.init_concept_stats(advanced_checks)
-        for path in subfolders:
-            if self.cancel_scan_flag.is_set() or time.perf_counter() - start_time > wait_time:
-                break
-            stats_dict = concept_stats.folder_scan(path, stats_dict, advanced_checks, self.concept, start_time, wait_time, self.cancel_scan_flag)
-            if self.concept.include_subdirectories and not self.cancel_scan_flag.is_set():     #add all subfolders of current directory to for loop
-                subfolders.extend([f for f in os.scandir(path) if f.is_dir() and not f.name.startswith('.')])
-            self.concept.concept_stats = stats_dict
-            #update GUI approx every half second
-            if time.perf_counter() > (last_update + 0.5):
-                last_update = time.perf_counter()
-                view.components.call_after(view.concept_stats_tab, 0, lambda: view._update_concept_stats(self))
+        def publish_progress(stats):
+            snapshot = copy.deepcopy(stats)
+            view.components.call_after(view, 0, lambda: publish(snapshot))
 
-        self.cancel_scan_flag.clear()
-        view.components.call_after(view.concept_stats_tab, 0, view._enable_scan_buttons)
-        view.components.call_after(view.concept_stats_tab, 0, lambda: view._update_concept_stats(self))
+        try:
+            concept_path = self.get_concept_path(concept.path)
+            if not concept_path:
+                raise FileNotFoundError(f"Dataset directory is unavailable: {concept.path}")
+            subfolders = [concept_path]
+            stats_dict = concept_stats.init_concept_stats(advanced_checks)
+            stats_dict["scan_complete"] = False
+            for path in subfolders:
+                if self.cancel_scan_flag.is_set() or time.perf_counter() - start_time > wait_time:
+                    stats_dict["force_cancelled"] = True
+                    break
+                stats_dict = concept_stats.folder_scan(path, stats_dict, advanced_checks, concept, start_time, wait_time, self.cancel_scan_flag, publish_progress)
+                if concept.include_subdirectories and not self.cancel_scan_flag.is_set():
+                    with os.scandir(path) as entries:
+                        subfolders.extend(f.path for f in entries if f.is_dir() and not f.name.startswith('.'))
+                if time.perf_counter() > last_update + 0.5:
+                    last_update = time.perf_counter()
+                    snapshot = copy.deepcopy(stats_dict)
+                    view.components.call_after(view, 0, lambda stats=snapshot: publish(stats))
+            stats_dict["scan_complete"] = not stats_dict["force_cancelled"]
+            stats_dict["processing_time"] = time.perf_counter() - start_time
+            view.components.call_after(view, 0, lambda: publish(stats_dict))
+        except Exception as exc:
+            message = str(exc)
+            view.components.call_after(view, 0, lambda: view._scan_status.setText(message) if not view._closed else None)
+        finally:
+            view.components.call_after(view, 0, view._enable_scan_buttons)
 
     def get_concept_stats_threaded(self, view, advanced_checks: bool, waittime: float):
+        if self.scan_thread is not None and self.scan_thread.is_alive():
+            return
+        self.cancel_scan_flag.clear()
+        view._disable_scan_buttons()
         self.scan_thread = threading.Thread(target=self.get_concept_stats, args=[view, advanced_checks, waittime], daemon=True)
         self.scan_thread.start()
 
-    def auto_update_concept_stats(self, view):
-        try:
-            view._update_concept_stats(self)      #load stats from config if available, else raises KeyError
-            if self.concept.concept_stats["file_size"] == 0:  #force rescan if empty
-                raise KeyError
-        except KeyError:
-            concept_path = self.get_concept_path(self.concept.path)
-            if concept_path:
-                self.get_concept_stats(view, False, 2)    #force rescan if config is empty, timeout of 2 sec
-                if self.concept.concept_stats["processing_time"] < 0.1:
-                    self.get_concept_stats(view, True, 2)    #do advanced scan automatically if basic took <0.1s
 
 
 class InputPipelineModule(

@@ -6,6 +6,7 @@ from modules.util.ui import pyside6_components
 from modules.util.ui.pyside6_i18n import set_localized_text
 from modules.util.ui.pyside6_i18n import translate as tr
 from modules.util.ui.PySide6UIState import PySide6UIState
+from modules.util.ui.validation import flush_and_validate_for_save
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from PySide6.QtWidgets import QDialog, QGridLayout, QLabel, QLayout, QWidget
@@ -13,6 +14,7 @@ from PySide6.QtWidgets import QDialog, QGridLayout, QLabel, QLayout, QWidget
 
 class _ConversionWorker(QObject):
     finished = Signal(bool, str)
+    status = Signal(str)
 
     def __init__(self, controller: ConvertModelUIController):
         super().__init__()
@@ -20,6 +22,7 @@ class _ConversionWorker(QObject):
 
     @Slot()
     def run(self):
+        self.controller.on_status = self.status.emit
         try:
             self.controller.perform_conversion()
         except Exception as error:
@@ -27,6 +30,8 @@ class _ConversionWorker(QObject):
             self.finished.emit(False, f"{type(error).__name__}: {error}")
         else:
             self.finished.emit(True, "")
+        finally:
+            self.controller.on_status = lambda _text: None
 
 
 class PySide6ConvertModelUIView(BaseConvertModelUIView, QDialog):
@@ -74,6 +79,7 @@ class PySide6ConvertModelUIView(BaseConvertModelUIView, QDialog):
             return
         self._rebuilding = True
         try:
+            flush_and_validate_for_save(self.ui_state)
             choices = self.controller.get_training_methods()
             if choices != self._method_choices:
                 if self._method_combo is not None:
@@ -96,6 +102,18 @@ class PySide6ConvertModelUIView(BaseConvertModelUIView, QDialog):
         finally:
             self._rebuilding = False
 
+    def build_merge_choice(self, frame, row, ui_state):
+        combo = pyside6_components.NoScrollComboBox(frame)
+        labels = ["Export LoRA adapter only", "Merge LoRA into base model"]
+        for label in labels:
+            combo.addItem(tr(label))
+        combo.setProperty("_i18n_combo_sources", labels)
+        combo.setCurrentIndex(int(self.controller.convert_model_args.merge_lora))
+        var = ui_state.get_var("merge_lora")
+        combo.currentIndexChanged.connect(lambda index: var.set(index == 1))
+        var.subscribe(lambda _: self._rebuild_dynamic_ui(), owner=combo)
+        pyside6_components._layout(frame).addWidget(combo, row, 1)
+
     def set_converting(self, active):
         self.button.setEnabled(not active)
         self._frame.setEnabled(not active)
@@ -111,6 +129,12 @@ class PySide6ConvertModelUIView(BaseConvertModelUIView, QDialog):
         if self._conversion_thread is not None:
             return
 
+        errors = flush_and_validate_for_save(self.ui_state)
+        if errors:
+            self._status_label.setText("\n".join(errors))
+            self._set_status_error(True)
+            return
+
         self._conversion_result = None
         self._set_status_error(False)
         self._status_label.setText(tr("Converting model..."))
@@ -123,12 +147,20 @@ class PySide6ConvertModelUIView(BaseConvertModelUIView, QDialog):
         self._conversion_worker = worker
 
         thread.started.connect(worker.run)
+        worker.status.connect(self._update_conversion_status)
         worker.finished.connect(self._record_conversion_result)
         worker.finished.connect(thread.quit)
         thread.finished.connect(worker.deleteLater)
         thread.finished.connect(self._conversion_thread_finished)
         thread.finished.connect(thread.deleteLater)
         thread.start()
+
+    @Slot(str)
+    def _update_conversion_status(self, status):
+        if status.startswith("Merging LoRA: "):
+            set_localized_text(self._status_label, "Merging LoRA: {progress}", progress=status.removeprefix("Merging LoRA: "))
+        else:
+            set_localized_text(self._status_label, status)
 
     @Slot(bool, str)
     def _record_conversion_result(self, success: bool, error: str):

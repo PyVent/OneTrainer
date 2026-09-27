@@ -215,7 +215,7 @@ class QtWorkflowTest(unittest.TestCase):
             next(button for button in self.view._tab_widgets["sampling"].findChildren(QPushButton)
                  if button.text() == "Sample Now").click()
             self.view.tabview.setCurrentWidget(self.view._tab_widgets["backup"])
-            for label in ("Backup Now", "Save Now"):
+            for label in ("Save training checkpoint", "Export trained weights"):
                 next(button for button in self.view._tab_widgets["backup"].findChildren(QPushButton)
                      if button.text() == label).click()
             commands.sample_default.assert_called_once_with()

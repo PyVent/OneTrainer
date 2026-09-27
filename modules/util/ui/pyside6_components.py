@@ -4,6 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
+from modules.util.enum.ModelFormat import ModelFormat
 from modules.util.enum.PathIOType import PathIOType
 from modules.util.enum.TimeUnit import TimeUnit
 from modules.util.path_util import supported_image_extensions, supported_video_extensions
@@ -266,25 +267,30 @@ def path_entry(
     use_save_dialog = io_type in (PathIOType.OUTPUT, PathIOType.MODEL)
 
     def _open_dialog():
+        selected_mode = mode
+        if io_type == PathIOType.MODEL:
+            with contextlib.suppress(KeyError, AttributeError, ValueError):
+                model_format = ModelFormat(ui_state.get_var("output_model_format").get())
+                selected_mode = "file" if model_format.is_single_file() else "dir"
         current_path_str = ui_state.get_var(var_name).get() or None
         current_dir = ""
         current_filename = ""
 
         if current_path_str:
             current_path = Path(current_path_str)
-            if mode == "file":
+            if selected_mode == "file":
                 current_dir = str(current_path.parent)
                 current_filename = str(current_path.name)
-            elif mode == "dir":
+            elif selected_mode == "dir":
                 current_dir = str(current_path.parent)
 
-        if mode == "dir":
+        if selected_mode == "dir":
             chosen = QFileDialog.getExistingDirectory(frame, "", current_dir, QFileDialog.Option.ShowDirsOnly)
         else:
             filters = ["All Files (*.*)"]
             if allow_model_files:
                 filters += [
-                    "Diffusers (model_index.json)",
+                    "Diffusers (model_index.json modular_model_index.json)",
                     "Checkpoint (*.ckpt *.pt *.bin)",
                     "Safetensors (*.safetensors)",
                 ]

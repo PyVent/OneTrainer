@@ -1,5 +1,6 @@
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import Mock
@@ -20,6 +21,7 @@ from modules.util.ui.PySide6UIState import PySide6UIState
 from matplotlib.colors import to_rgba
 from PIL import Image
 from PySide6.QtGui import QPalette
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QTabWidget
 
 
@@ -37,6 +39,13 @@ class NestedVisualLayoutTest(unittest.TestCase):
         apply_theme(self.app, "light")
         os.chdir(self.previous_dir)
         self.temporary_dir.cleanup()
+
+    def wait_for_preview(self, view):
+        view._update_image_preview()
+        deadline = time.monotonic() + 10
+        while view._preview_busy and time.monotonic() < deadline:
+            QTest.qWait(10)
+        self.assertFalse(view._preview_busy)
 
     def test_timestep_chart_matches_dark_and_light_palette(self):
         apply_theme(self.app, "dark")
@@ -76,9 +85,13 @@ class NestedVisualLayoutTest(unittest.TestCase):
         tabs = view.findChild(QTabWidget)
         view.resize(900, 720)
         view.show()
-        tabs.setCurrentIndex(1)
+        tabs.setCurrentIndex(2)
         self.app.processEvents()
-        self.assertEqual(view._image_layout_mode, "stacked")
+        self.assertEqual(view._image_layout_mode, "toggle")
+        view._toggle_preview()
+        self.assertTrue(view.tabs.isHidden())
+        self.assertFalse(view._preview_scroll.isHidden())
+        view._toggle_preview()
         self.assertEqual(view._image_scroll.horizontalScrollBar().maximum(), 0)
 
         view.resize(1200, 720)
@@ -87,9 +100,9 @@ class NestedVisualLayoutTest(unittest.TestCase):
         self.assertEqual(view._image_scroll.horizontalScrollBar().maximum(), 0)
 
         view.resize(900, 720)
-        tabs.setCurrentIndex(3)
+        tabs.setCurrentIndex(4)
         self.app.processEvents()
-        self.assertEqual(tabs.widget(3).horizontalScrollBar().maximum(), 0)
+        self.assertEqual(tabs.widget(4).horizontalScrollBar().maximum(), 0)
 
     def test_empty_concept_preview_keeps_logo_transparency(self):
         config = TrainConfig.default_values()
@@ -101,6 +114,7 @@ class NestedVisualLayoutTest(unittest.TestCase):
             PySide6UIState(concept), PySide6UIState(concept.image), PySide6UIState(concept.text),
         )
         self.addCleanup(view.close)
+        self.wait_for_preview(view)
         self.assertTrue(controller.preview_is_placeholder)
         self.assertEqual(view._filename_label.text(), "No images in this concept yet")
         self.assertTrue(view._image_label.pixmap().hasAlphaChannel())
@@ -109,12 +123,12 @@ class NestedVisualLayoutTest(unittest.TestCase):
         try:
             view.show()
             set_language(self.app, "ru", persist=False)
-            self.assertEqual(view.findChild(QTabWidget).tabText(0), "Общие")
+            self.assertEqual(view.findChild(QTabWidget).tabText(0), "Данные")
             self.assertEqual(view._filename_label.text(), "В этом концепте пока нет изображений")
             controller.get_preview_image = Mock(return_value=(
                 Image.new("RGB", (64, 64), "red"), "Sample", "user prompt"
             ))
-            view._update_image_preview()
+            self.wait_for_preview(view)
             self.assertEqual(view._filename_label.text(), "Sample")
             set_language(self.app, "en", persist=False)
             self.assertEqual(view._filename_label.text(), "Sample")

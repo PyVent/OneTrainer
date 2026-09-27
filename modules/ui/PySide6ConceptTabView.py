@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from modules.ui.BaseConceptTabView import BaseConceptTabView, BaseConceptWidgetView
 from modules.ui.ConceptTabController import ConceptTabController
 from modules.ui.PySide6ConceptWindowView import PySide6ConceptWindowView
@@ -178,8 +180,9 @@ class PySide6ConceptWidgetView(BaseConceptWidgetView, QWidget):
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(4)
 
-        image = self._get_preview_image()
-        pixmap = QPixmap.fromImage(ImageQt(image.convert("RGBA")))
+        self._preview_key = None
+        pixmap = QPixmap(str(Path(__file__).resolve().parents[2] / "resources/icons/icon.png"))
+        pixmap = pixmap.scaled(150, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         self.image_label = QLabel(self)
         self.image_label.setPixmap(pixmap)
         self.image_label.setFixedSize(150, 150)
@@ -232,14 +235,25 @@ class PySide6ConceptWidgetView(BaseConceptWidgetView, QWidget):
     def configure_element(self):
         self.name_label.setText(self._get_display_name() or "Untitled concept")
         self.name_label.setToolTip(self._get_display_name())
-        image = self._get_preview_image()
-        pixmap = QPixmap.fromImage(ImageQt(image.convert("RGBA")))
-        self.image_label.setPixmap(pixmap)
+        if self.isVisible():
+            self._refresh_preview()
         try:
             if hasattr(self.concept, '_search_cache'):
                 delattr(self.concept, '_search_cache')
         except AttributeError:
             pass
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Hidden concept tabs must not read every dataset during application startup.
+        QTimer.singleShot(0, self, self._refresh_preview)
+
+    def _refresh_preview(self):
+        key = (self.concept.path, self.concept.include_subdirectories)
+        if self.isVisible() and key != self._preview_key:
+            image = self._get_preview_image()
+            self.image_label.setPixmap(QPixmap.fromImage(ImageQt(image.convert("RGBA"))))
+            self._preview_key = key
 
     def place_in_list(self):
         index = getattr(self, 'visible_index', self.i)

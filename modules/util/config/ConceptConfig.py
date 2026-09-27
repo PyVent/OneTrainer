@@ -84,6 +84,9 @@ class ConceptImageConfig(BaseConfig):
 class ConceptTextConfig(BaseConfig):
     prompt_source: str
     prompt_path: str
+    caption_mode: str
+    caption_format: str
+    caption_overrides: dict
     enable_tag_shuffling: bool
     tag_delimiter: str
     keep_tags_count: int
@@ -108,6 +111,10 @@ class ConceptTextConfig(BaseConfig):
 
         data.append(("prompt_source", "sample", str, False))
         data.append(("prompt_path", "", str, False))
+        # Missing fields in existing configs retain legacy selection/augmentation.
+        data.append(("caption_mode", "random", str, False))
+        data.append(("caption_format", "tags", str, False))
+        data.append(("caption_overrides", {}, dict, False))
         data.append(("enable_tag_shuffling", False, bool, False))
         data.append(("tag_delimiter", ",", str, False))
         data.append(("keep_tags_count", 1, int, False))
@@ -144,10 +151,11 @@ class ConceptConfig(BaseConfig):
     def __init__(self, data: list[(str, Any, type, bool)]):
         super().__init__(
             data,
-            config_version=2,
+            config_version=3,
             config_migrations={
                 0: self.__migration_0,
                 1: self.__migration_1,
+                2: self.__migration_2,
             }
         )
 
@@ -176,6 +184,15 @@ class ConceptConfig(BaseConfig):
         as_dict['image'] = self.image.to_dict()
         as_dict['text'] = self.text.to_dict()
         return as_dict
+
+    def __migration_2(self, data: dict) -> dict:
+        # UI creation presets must not leak into older concepts while loading.
+        migrated = dict(data)
+        text = dict(migrated.get("text", {}))
+        text.setdefault("caption_mode", "random")
+        text.setdefault("caption_format", "tags")
+        migrated["text"] = text
+        return migrated
 
     @staticmethod
     def default_values():
