@@ -4,9 +4,14 @@ from abc import ABCMeta, abstractmethod
 from collections.abc import Callable
 
 import modules.util.multi_gpu_util as multi
+from modules.dataLoader.AspectBatchSorting import AspectBatchSorting, InlineAspectBatchSorting
+from modules.dataLoader.CaptionAugmentations import CapitalizeTags, DropTags, ShuffleTags
+from modules.dataLoader.DiskCache import DiskCache
+from modules.dataLoader.ExpandCaptionSamples import ExpandCaptionSamples
 from modules.dataLoader.LoadImage import LoadImage
 from modules.dataLoader.ProgressCollectPaths import ProgressCollectPaths
 from modules.dataLoader.RGBAImageAugmentations import RandomBrightness, RandomContrast, RandomHue, RandomSaturation
+from modules.dataLoader.VariationSorting import VariationSorting
 from modules.model.BaseModel import BaseModel
 from modules.modelSetup.BaseModelSetup import BaseModelSetup
 from modules.modelSetup.mixin.ModelSetupText2ImageMixin import ModelSetupText2ImageMixin
@@ -16,21 +21,14 @@ from modules.util.enum.DataType import DataType
 from modules.util.TrainProgress import TrainProgress
 
 from mgds.OutputPipelineModule import OutputPipelineModule
-from mgds.pipelineModules.AspectBatchSorting import AspectBatchSorting
 from mgds.pipelineModules.AspectBucketing import AspectBucketing
 from mgds.pipelineModules.CalcAspect import CalcAspect
-from mgds.pipelineModules.CapitalizeTags import CapitalizeTags
-from mgds.pipelineModules.DiskCache import DiskCache
 from mgds.pipelineModules.DistributedSampler import DistributedSampler
 from mgds.pipelineModules.DownloadHuggingfaceDatasets import DownloadHuggingfaceDatasets
-from mgds.pipelineModules.DropTags import DropTags
 from mgds.pipelineModules.GenerateImageLike import GenerateImageLike
 from mgds.pipelineModules.GenerateMaskedConditioningImage import GenerateMaskedConditioningImage
-from mgds.pipelineModules.GetFilename import GetFilename
 from mgds.pipelineModules.ImageToVideo import ImageToVideo
-from mgds.pipelineModules.InlineAspectBatchSorting import InlineAspectBatchSorting
 from mgds.pipelineModules.InlineDistributedSampler import InlineDistributedSampler
-from mgds.pipelineModules.LoadMultipleTexts import LoadMultipleTexts
 from mgds.pipelineModules.LoadVideo import LoadVideo
 from mgds.pipelineModules.ModifyPath import ModifyPath
 from mgds.pipelineModules.RandomCircularMaskShrink import RandomCircularMaskShrink
@@ -40,11 +38,7 @@ from mgds.pipelineModules.RandomMaskRotateCrop import RandomMaskRotateCrop
 from mgds.pipelineModules.RandomRotate import RandomRotate
 from mgds.pipelineModules.ScaleCropImage import ScaleCropImage
 from mgds.pipelineModules.SelectFirstInput import SelectFirstInput
-from mgds.pipelineModules.SelectInput import SelectInput
-from mgds.pipelineModules.SelectRandomText import SelectRandomText
-from mgds.pipelineModules.ShuffleTags import ShuffleTags
 from mgds.pipelineModules.SingleAspectCalculation import SingleAspectCalculation
-from mgds.pipelineModules.VariationSorting import VariationSorting
 
 import torch
 
@@ -67,14 +61,12 @@ class DataLoaderText2ImageMixin(metaclass=ABCMeta):
         collect_paths = ProgressCollectPaths(
             concept_in_name='concept', path_in_name='path', include_subdirectories_in_name='concept.include_subdirectories', enabled_in_name='enabled',
             path_out_name='image_path', concept_out_name='concept',
-            extensions=supported_extensions, include_postfix=None, exclude_postfix=['-masklabel','-condlabel']
+            extensions=supported_extensions, include_postfix=None, exclude_postfix=['-masklabel','-condlabel'], collect_file_stats=True,
         )
 
         mask_path = ModifyPath(in_name='image_path', out_name='mask_path', postfix='-masklabel', extension='.png')
         cond_path = ModifyPath(in_name='image_path', out_name='cond_path', postfix='-condlabel', extension='.png')
-        sample_prompt_path = ModifyPath(in_name='image_path', out_name='sample_prompt_path', postfix='', extension='.txt')
-
-        modules = [download_datasets, collect_paths, sample_prompt_path]
+        modules = [download_datasets, collect_paths, ExpandCaptionSamples(use_collected_stats=True, cache_dir=config.cache_dir)]
 
         if config.masked_training:
             modules.append(mask_path)
@@ -100,22 +92,10 @@ class DataLoaderText2ImageMixin(metaclass=ABCMeta):
 
         load_cond_image = LoadImage(path_in_name='cond_path', image_out_name='custom_conditioning_image', range_min=0, range_max=1, channels=image_channels, supported_extensions=path_util.supported_image_extensions(), dtype=train_dtype.torch_dtype())
 
-        load_sample_prompts = LoadMultipleTexts(path_in_name='sample_prompt_path', texts_out_name='sample_prompts')
-        load_concept_prompts = LoadMultipleTexts(path_in_name='concept.text.prompt_path', texts_out_name='concept_prompts')
-        filename_prompt = GetFilename(path_in_name='image_path', filename_out_name='filename_prompt', include_extension=False)
-        select_prompt_input = SelectInput(setting_name='concept.text.prompt_source', out_name='prompts', setting_to_in_name_map={
-            'sample': 'sample_prompts',
-            'concept': 'concept_prompts',
-            'filename': 'filename_prompt',
-        }, default_in_name='sample_prompts')
-        select_random_text = SelectRandomText(texts_in_name='prompts', text_out_name='prompt')
-
         modules = [load_image, load_video]
 
         if vae_frame_dim:
             modules.append(image_to_video)
-
-        modules.extend([load_sample_prompts, load_concept_prompts, filename_prompt, select_prompt_input, select_random_text])
 
         if config.masked_training:
             modules.append(generate_mask)
@@ -346,12 +326,16 @@ class DataLoaderText2ImageMixin(metaclass=ABCMeta):
         def before_cache_text_fun():
             model_setup.prepare_text_caching(model, config)
 
+        # Persist the actual augmented caption alongside its tokens/hidden states.
+        # Regenerating it outside the text cache can report a different caption.
+        text_split_names = list(dict.fromkeys([*text_split_names, 'prompt']))
+
         image_disk_cache = DiskCache(cache_dir=image_cache_dir, split_names=image_split_names, aggregate_names=image_aggregate_names, variations_in_name='concept.image_variations',
-                                     balancing_in_name='concept.balancing', balancing_strategy_in_name='concept.balancing_strategy', variations_group_in_name=['concept.path', 'concept.seed', 'concept.include_subdirectories', 'concept.image'],
+                                     balancing_in_name='concept.balancing', balancing_strategy_in_name='concept.balancing_strategy', variations_group_in_name=['concept.path', 'concept.seed', 'concept.include_subdirectories', 'concept.image', 'concept._image_sample_key'],
                                      group_enabled_in_name='concept.enabled', before_cache_fun=before_cache_image_fun)
 
         text_disk_cache = DiskCache(cache_dir=text_cache_dir, split_names=text_split_names, aggregate_names=[], variations_in_name='concept.text_variations', balancing_in_name='concept.balancing', balancing_strategy_in_name='concept.balancing_strategy',
-                                    variations_group_in_name=['concept.path', 'concept.seed', 'concept.include_subdirectories', 'concept.text'], group_enabled_in_name='concept.enabled', before_cache_fun=before_cache_text_fun)
+                                    variations_group_in_name=['concept.path', 'concept.seed', 'concept.include_subdirectories', 'concept.text', 'concept._text_sample_key'], group_enabled_in_name='concept.enabled', before_cache_fun=before_cache_text_fun)
 
         modules = []
 
@@ -367,7 +351,7 @@ class DataLoaderText2ImageMixin(metaclass=ABCMeta):
 
         if len(sort_names) > 0:
             variation_sorting = VariationSorting(names=sort_names, balancing_in_name='concept.balancing', balancing_strategy_in_name='concept.balancing_strategy',
-                                                 variations_group_in_name=['concept.path', 'concept.seed', 'concept.include_subdirectories', 'concept.text'], group_enabled_in_name='concept.enabled')
+                                                 variations_group_in_name=['concept.path', 'concept.seed', 'concept.include_subdirectories', 'concept.text', 'concept._text_sample_key'], group_enabled_in_name='concept.enabled')
 
             modules.append(variation_sorting)
 

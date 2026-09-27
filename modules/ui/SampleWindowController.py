@@ -36,6 +36,8 @@ class SampleWindowController:
             # remove some settings to speed up model loading for sampling
             self.initial_train_config.optimizer.optimizer = None
             self.initial_train_config.ema = EMAMode.OFF
+            # Standalone generation is independent of the training compile toggle.
+            self.initial_train_config.compile = False
         else:
             self.initial_train_config = None
 

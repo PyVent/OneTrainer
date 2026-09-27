@@ -4,6 +4,7 @@ import threading
 import time
 
 from modules.util import path_util
+from modules.util.caption_util import load_captions, read_caption_lines
 from modules.util.config.ConceptConfig import ConceptConfig
 from modules.util.image_util import load_image
 
@@ -17,6 +18,8 @@ def init_concept_stats(advanced_checks : bool):
     stats_dict = {
                 "file_size" : 0,
                 "image_count" : 0,
+                "image_caption_examples": 0,
+                "video_caption_examples": 0,
                 "image_with_mask_count" : "-",
                 "image_with_caption_count" : "-",
                 "video_count" : 0,
@@ -83,27 +86,36 @@ def init_concept_stats(advanced_checks : bool):
 
     return stats_dict
 
-def folder_scan(dir, stats_dict : dict, advanced_checks : bool, conceptconfig : ConceptConfig, start_time : float, wait_time : float, cancel_scan_flag : threading.Event):
+def folder_scan(dir, stats_dict : dict, advanced_checks : bool, conceptconfig : ConceptConfig, start_time : float, wait_time : float, cancel_scan_flag : threading.Event, on_progress=None):
     #break and return defaults if no path or nonexistent path
     if not os.path.isdir(dir):
         stats_dict["force_cancelled"] = True
         return stats_dict
     img_extensions_list = path_util.SUPPORTED_IMAGE_EXTENSIONS
     vid_extensions_list = path_util.SUPPORTED_VIDEO_EXTENSIONS
-    file_list = [f for f in os.scandir(dir) if f.is_file()]     #this may take time on large directories
+    with os.scandir(dir) as entries:
+        file_list = [f for f in entries if f.is_file()]
     if advanced_checks:
         aspect_ratio_list = list(stats_dict["aspect_buckets"].keys())
-        file_list_str = [x.path for x in file_list]     #seems faster to check list of strings for matching files than list of path objects
+        file_list_str = {x.path for x in file_list}
     stats_dict["directory_count"] += 1
+    stats_dict["caption_source"] = [conceptconfig.path, conceptconfig.include_subdirectories, conceptconfig.text.prompt_source, conceptconfig.text.prompt_path]
+    text_settings = conceptconfig.text.to_dict()
+    shared_captions = load_captions("", text_settings) if text_settings["prompt_source"] == "concept" else None
+    last_progress = time.perf_counter()
 
     for path in file_list:
         stats_dict["processing_time"] = time.perf_counter() - start_time
+        if on_progress is not None and time.perf_counter() - last_progress >= 0.25:
+            on_progress(stats_dict)
+            last_progress = time.perf_counter()
         if time.perf_counter() - start_time > wait_time or cancel_scan_flag.is_set():
             stats_dict["force_cancelled"] = True
             return stats_dict
         basename, extension = os.path.splitext(path)
         if extension.lower() in img_extensions_list and not path.name.endswith("-masklabel.png") and not path.name.endswith("-condlabel.png"):
             stats_dict["image_count"] += 1
+            stats_dict["image_caption_examples"] += len(shared_captions if shared_captions is not None else load_captions(path.path, text_settings))
             stats_dict["file_size"] += path.stat().st_size
             if advanced_checks:
                 #check if image has a corresponding mask/caption in the same directory
@@ -113,8 +125,8 @@ def folder_scan(dir, stats_dict : dict, advanced_checks : bool, conceptconfig : 
                 if (basename + ".txt") in file_list_str:
                     stats_dict["paired_captions"] += 1
                     stats_dict["image_with_caption_count"] += 1
-                    with open(basename + ".txt", "r") as captionfile:
-                        captionlist = captionfile.read().splitlines()
+                    captionlist = [text for text in read_caption_lines(basename + ".txt") if text]
+                    if captionlist:
                         #get character/word count of captions, split by newlines in each text file
                         for caption in captionlist:
                             stats_dict["subcaption_count"] += 1     #each line in one file
@@ -149,14 +161,15 @@ def folder_scan(dir, stats_dict : dict, advanced_checks : bool, conceptconfig : 
 
         elif extension.lower() in vid_extensions_list:
             stats_dict["video_count"] += 1
+            stats_dict["video_caption_examples"] += len(shared_captions if shared_captions is not None else load_captions(path.path, text_settings))
             stats_dict["file_size"] += path.stat().st_size
             if advanced_checks:
                 # Check for a corresponding caption in the same directory.
                 if (basename + ".txt") in file_list_str:
                     stats_dict["paired_captions"] += 1
                     stats_dict["video_with_caption_count"] += 1
-                    with open(basename + ".txt", "r") as captionfile:
-                        captionlist = captionfile.read().splitlines()
+                    captionlist = [text for text in read_caption_lines(basename + ".txt") if text]
+                    if captionlist:
                         #get character/word count of captions, split by newlines in each text file
                         for caption in captionlist:
                             stats_dict["subcaption_count"] += 1     #each line in one file
@@ -169,7 +182,7 @@ def folder_scan(dir, stats_dict : dict, advanced_checks : bool, conceptconfig : 
                             stats_dict["avg_caption_length"][0] += (char_count - stats_dict["avg_caption_length"][0])/stats_dict["subcaption_count"]
                             stats_dict["avg_caption_length"][1] += (word_count - stats_dict["avg_caption_length"][1])/stats_dict["subcaption_count"]
 
-                vid = cv2.VideoCapture(path)
+                vid = cv2.VideoCapture(path.path)
                 if not vid.isOpened():
                     vid.release()
                     continue

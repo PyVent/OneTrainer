@@ -71,7 +71,7 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         "LoRA": ("LoRA", "Configure adapter training for the selected model."),
         "embedding": ("Embedding", "Configure embedding training and token behavior."),
         "additional embeddings": ("Additional Embeddings", "Manage extra embeddings used during training."),
-        "backup": ("Backups", "Control automatic backups and model saves."),
+        "backup": ("Checkpoints and exports", "Checkpoints restore training progress. Exports save trained weights for generation."),
         "sampling": ("Sampling", "Choose when and how preview images are generated."),
         "tools": ("Tools", "Open dataset, video, conversion, sampling and profiling tools."),
         "cloud": ("Cloud", "Configure a remote training instance and connection."),
@@ -452,8 +452,8 @@ class PySide6TrainView(BaseTrainUIView, QMainWindow, metaclass=QtABCMeta):
         lo.setContentsMargins(12, 12, 12, 12)
         lo.setVerticalSpacing(14)
         lo.setColumnStretch(0, 1)
-        backups = self._add_settings_group(frame, lo, 0, "Automatic backups")
-        saves = self._add_settings_group(frame, lo, 1, "Model saves")
+        backups = self._add_settings_group(frame, lo, 0, "Training checkpoints")
+        saves = self._add_settings_group(frame, lo, 1, "Trained weights export")
         self.build_backup_tab_content(backups, saves, self.controller, self.ui_state)
         lo.setRowStretch(2, 1)
 

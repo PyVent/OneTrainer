@@ -56,6 +56,11 @@ class BaseConvertModelUIView:
     def build_dynamic_content(self, frame, controller, ui_state):
         row = 0
 
+        if controller.convert_model_args.training_method == TrainingMethod.LORA:
+            self.components.label(frame, row, 0, "Result")
+            self.build_merge_choice(frame, row, ui_state)
+            row += 1
+
         # base model name -- LoRA/embedding conversion needs to load the base model to know its native
         # module names (used to reverse KOHYA/LEGACY un-flattening); a fine-tune conversion's "Input name"
         # already is the base model, so this field only applies to LoRA/embedding conversions.

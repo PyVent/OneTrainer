@@ -114,7 +114,7 @@ def validate_path(
 
     if io_type == PathIOType.MODEL and output_format is not None:
         if output_format == "DIFFUSERS":
-            if ENDS_WITH_EXT.search(trimmed):
+            if trimmed.lower().endswith((".safetensors", ".ckpt", ".pt", ".bin")):
                 return "Diffusers output must be a directory path, not a file"
             return _check_overwrite(trimmed, is_dir=True, prevent=prevent_overwrites)
 

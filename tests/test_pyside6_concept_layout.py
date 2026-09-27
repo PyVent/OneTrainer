@@ -2,9 +2,11 @@ import json
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from modules.ui.BaseConceptTabView import BaseConceptWidgetView
 from modules.ui.ConceptTabController import ConceptTabController
 from modules.ui.PySide6ConceptTabView import PySide6ConceptTabView
 from modules.ui.PySide6SamplingTabView import PySide6SamplingTabView
@@ -53,7 +55,9 @@ class ConceptLayoutTest(unittest.TestCase):
         config = TrainConfig.default_values()
         parent = QWidget()
         self.addCleanup(parent.close)
-        view = PySide6ConceptTabView(parent, ConceptTabController(config), PySide6UIState(config))
+        with patch.object(BaseConceptWidgetView, "_get_preview_image") as preview:
+            view = PySide6ConceptTabView(parent, ConceptTabController(config), PySide6UIState(config))
+            preview.assert_not_called()
         original_widgets = tuple(view.widgets)
 
         self.assertEqual(len(original_widgets), 12)

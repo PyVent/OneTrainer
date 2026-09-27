@@ -6,6 +6,7 @@ from modules.util.config.TrainConfig import QuantizationConfig
 from modules.util.enum.ModelFormat import ModelFormat
 from modules.util.enum.ModelType import ModelType
 from modules.util.enum.TrainingMethod import TrainingMethod
+from modules.util.merge_lora_util import merge_lora
 from modules.util.ModelNames import EmbeddingName, ModelNames
 from modules.util.torch_util import torch_gc
 
@@ -27,6 +28,7 @@ class ConvertModelUIController:
         if huggingface_token is not None:
             self.convert_model_args.huggingface_token = huggingface_token
         self.view = None
+        self.on_status = lambda _text: None
 
     def create_window(self, parent, view_cls):
         self.view = view_cls(parent, self)
@@ -43,18 +45,18 @@ class ConvertModelUIController:
     def get_output_formats(self) -> list[tuple[str, ModelFormat]]:
         labels = {
             ModelFormat.SAFETENSORS: "Safetensors",
-            ModelFormat.DIFFUSERS_LORA: "Diffusers",
+            ModelFormat.DIFFUSERS_LORA: "LoRA file — Diffusers (.safetensors)",
             ModelFormat.KOHYA_LORA: "Kohya",
             ModelFormat.ORIGINAL_LORA: "Original",
             ModelFormat.COMFY_LORA: "Comfy",
             ModelFormat.LEGACY_LORA: "Legacy",
-            ModelFormat.DIFFUSERS: "Diffusers",
+            ModelFormat.DIFFUSERS: "Complete model — Diffusers directory",
             ModelFormat.ORIGINAL_SINGLE_FILE: "Original (single file)",
             ModelFormat.ORIGINAL_TRANSFORMER: "Original (transformer only)",
             ModelFormat.COMFY_TRANSFORMER: "Comfy (transformer only)",
             ModelFormat.LEGACY_SAFETENSORS: "Legacy",
         }
-        formats = self.convert_model_args.model_type.supported_output_formats(self.convert_model_args.training_method)
+        formats = self.convert_model_args.model_type.supported_output_formats(self.convert_model_args.output_training_method())
         return [(labels[fmt], fmt) for fmt in formats]
 
     def perform_conversion(self):
@@ -67,7 +69,7 @@ class ConvertModelUIController:
             )
             model_saver = create.create_model_saver(
                 model_type=self.convert_model_args.model_type,
-                training_method=self.convert_model_args.training_method
+                training_method=self.convert_model_args.output_training_method()
             )
 
             if model_loader is None or model_saver is None:
@@ -76,6 +78,7 @@ class ConvertModelUIController:
             huggingface_util.configure_hub(self.convert_model_args.huggingface_token)
 
             print("Loading model " + self.convert_model_args.input_name)
+            self.on_status("Loading base model and input weights…")
             if self.convert_model_args.training_method in [TrainingMethod.FINE_TUNE]:
                 model = model_loader.load(
                     model_type=self.convert_model_args.model_type,
@@ -99,7 +102,12 @@ class ConvertModelUIController:
             else:
                 raise Exception("could not load model: " + self.convert_model_args.input_name)
 
+            if self.convert_model_args.training_method == TrainingMethod.LORA and self.convert_model_args.merge_lora:
+                merge_lora(model, lambda done, total: self.on_status(f"Merging LoRA: {done}/{total} layers"))
+                base_loader = create.create_model_loader(self.convert_model_args.model_type, TrainingMethod.FINE_TUNE)
+                model.model_spec = base_loader._load_default_model_spec(self.convert_model_args.model_type)
             print("Saving model " + self.convert_model_args.output_model_destination)
+            self.on_status("Writing output model…")
             model_saver.save(
                 model=model,
                 model_type=self.convert_model_args.model_type,

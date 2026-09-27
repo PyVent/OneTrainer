@@ -18,7 +18,7 @@ from modules.util.enum.ModelType import ModelType
 from modules.util.enum.TrainingMethod import TrainingMethod
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QComboBox, QFileDialog, QLineEdit, QPushButton
 
 
 class _SyntheticController(ConvertModelUIController):
@@ -111,6 +111,31 @@ class ConvertAsyncTest(unittest.TestCase):
         self.assertEqual(controller.convert_model_args.training_method, TrainingMethod.LORA)
         methods = window._layout.itemAtPosition(1, 1).widget()
         self.assertIn(str(TrainingMethod.EMBEDDING), [methods.itemData(i) for i in range(methods.count())])
+
+    def test_merge_has_model_formats_and_commits_typed_paths_before_start(self):
+        controller = ConvertModelUIController(ModelType.ANIMA_QWEN21_VAE)
+        controller.convert_model_args.training_method = TrainingMethod.LORA
+        window = controller.create_window(None, PySide6ConvertModelUIView)
+        self.addCleanup(window.close)
+        choices = window._dynamic_frame.findChildren(QComboBox)
+        merge = next(combo for combo in choices if combo.count() == 2 and "LoRA" in combo.itemText(0))
+        self.assertFalse(controller.convert_model_args.merge_lora)
+        merge.setCurrentIndex(1)
+        self.assertTrue(controller.convert_model_args.merge_lora)
+        self.assertIn(ModelFormat.DIFFUSERS, [value for _label, value in controller.get_output_formats()])
+        output_path = window._layout.itemAtPosition(5, 1).widget()
+        with patch.object(QFileDialog, "getExistingDirectory", return_value="merged-v1.0") as browse:
+            output_path.findChild(QPushButton).click()
+            browse.assert_called_once()
+        fields = {field._validator.var_name: field for field in window.findChildren(QLineEdit) if hasattr(field, "_validator")}
+        fields["input_name"].setText("adapter.safetensors")
+        fields["base_model_name"].setText("base-v1.0")
+        fields["output_model_destination"].setText("merged-v1.0")
+        with patch.object(controller, "perform_conversion") as convert:
+            window.start_conversion()
+            self._wait_for(lambda: window._conversion_thread is None)
+            convert.assert_called_once()
+        self.assertEqual(controller.convert_model_args.output_model_destination, "merged-v1.0")
 
     def test_unsupported_conversion_is_rejected_before_loading_or_downloading(self):
         controller = ConvertModelUIController()

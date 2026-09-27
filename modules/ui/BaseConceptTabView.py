@@ -1,9 +1,8 @@
 import os
-import pathlib
+from pathlib import Path
 
 from modules.ui.BaseConfigListView import BaseConfigListView
 from modules.ui.ConceptWindowController import ConceptWindowController
-from modules.util import path_util
 from modules.util.config.ConceptConfig import ConceptConfig
 from modules.util.enum.ConceptType import ConceptType
 from modules.util.image_util import load_image
@@ -68,21 +67,14 @@ class BaseConceptWidgetView:
             return ""
 
     def _get_preview_image(self):
-        preview_path = "resources/icons/icon.png"
-        glob_pattern = "**/*.*" if getattr(self.concept, 'include_subdirectories', False) else "*.*"
-
+        preview_path = Path(__file__).resolve().parents[2] / "resources/icons/icon.png"
         concept_path = ConceptWindowController.get_concept_path(getattr(self.concept, 'path', None))
         if concept_path:
-            for path in pathlib.Path(concept_path).glob(glob_pattern):
-                if any(part.startswith('.') for part in path.relative_to(concept_path).parent.parts):
-                    continue
-                extension = os.path.splitext(path)[1]
-                if (path.is_file()
-                        and path_util.is_supported_image_extension(extension)
-                        and not path.name.endswith("-masklabel.png")
-                        and not path.name.endswith("-condlabel.png")):
-                    preview_path = path_util.canonical_join(concept_path, path)
-                    break
+            paths = ConceptWindowController._iter_preview_paths(concept_path, self.concept.include_subdirectories)
+            try:
+                preview_path = next(paths, preview_path)
+            finally:
+                paths.close()
         try:
             image = load_image(preview_path, convert_mode="RGBA")
         except OSError:

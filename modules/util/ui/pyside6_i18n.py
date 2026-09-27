@@ -58,7 +58,7 @@ _CORE_RU = {
 @lru_cache(maxsize=1)
 def _catalog() -> dict[str, str]:
     result = dict(_CORE_RU)
-    for suffix in ("main", "tools"):
+    for suffix in ("main", "tools", "concept"):
         module_name = f"modules.util.ui.pyside6_i18n_catalog_{suffix}"
         try:
             module = import_module(module_name)

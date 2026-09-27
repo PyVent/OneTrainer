@@ -30,6 +30,7 @@ from modules.util.enum.FileType import FileType
 from modules.util.enum.ModelFormat import ModelFormat
 from modules.util.enum.TimeUnit import TimeUnit
 from modules.util.enum.TrainingMethod import TrainingMethod
+from modules.util.loading_progress import loading_status
 from modules.util.profiling_util import PeakMemoryRecorder, TorchMemoryRecorder, TorchProfiler
 from modules.util.time_util import get_string_timestamp
 from modules.util.torch_util import torch_gc
@@ -105,7 +106,7 @@ class GenericTrainer(BaseTrainer):
         model_names = self.config.model_names()
 
         if self.config.continue_last_backup:
-            self.callbacks.on_update_status("searching for previous backups")
+            self.callbacks.on_update_status("searching for training checkpoints")
             last_backup_path = self.config.get_last_backup_path()
 
             if last_backup_path:
@@ -116,9 +117,9 @@ class GenericTrainer(BaseTrainer):
                 else:  # fine-tunes
                     model_names.base_model = last_backup_path
 
-                print(f"Continuing training from backup '{last_backup_path}'...")
+                print(f"Resuming training from checkpoint '{last_backup_path}'...")
             else:
-                print("No backup found, continuing without backup...")
+                print("No training checkpoint found; starting from the configured weights...")
 
         huggingface_util.configure_hub(
             self.config.secrets.huggingface_token,
@@ -190,7 +191,7 @@ class GenericTrainer(BaseTrainer):
             try:
                 shutil.rmtree(dirpath)
             except Exception:  # noqa: PERF203
-                tqdm.write(f"Could not delete old rolling backup {dirpath}")
+                tqdm.write(f"Could not delete old training checkpoint {dirpath}")
 
         return
 
@@ -428,7 +429,7 @@ class GenericTrainer(BaseTrainer):
     def __backup(self, train_progress: TrainProgress, print_msg: bool = True):
         torch_gc()
 
-        self.callbacks.on_update_status("Creating backup")
+        self.callbacks.on_update_status("Saving training checkpoint")
 
         backup_name = f"{get_string_timestamp()}-backup-{train_progress.filename_string()}{MARKED_BACKUP_SUFFIX}"
         backups_path = os.path.join(self.config.workspace_dir, "backup")
@@ -442,7 +443,7 @@ class GenericTrainer(BaseTrainer):
         backup_saved = False
         try:
             if print_msg:
-                tqdm.write("Creating Backup " + backup_path)
+                tqdm.write("Saving training checkpoint " + backup_path)
 
             def write(staging_path: str) -> None:
                 self.model_saver.save(
@@ -458,7 +459,7 @@ class GenericTrainer(BaseTrainer):
             backup_saved = True
         except Exception:
             traceback.print_exc()
-            tqdm.write("Could not save backup. Check your disk space!")
+            tqdm.write("Could not save training checkpoint. Check your disk space!")
         finally:
             if backup_saved and self.config.rolling_backup:
                 self.__prune_backups(self.config.rolling_backup_count)
@@ -640,13 +641,14 @@ class GenericTrainer(BaseTrainer):
             self.callbacks.on_update_status("Starting epoch/caching")
 
             #call start_next_epoch with only one process at first, because it might write to the cache. All subsequent processes can read in parallel:
-            for _ in multi.master_first():
-                if self.config.latent_caching:
-                    self.data_loader.get_data_set().start_next_epoch()
-                    self.model_setup.setup_train_device(self.model, self.config)
-                else:
-                    self.model_setup.setup_train_device(self.model, self.config)
-                    self.data_loader.get_data_set().start_next_epoch()
+            with loading_status(self.callbacks.on_update_status):
+                for _ in multi.master_first():
+                    if self.config.latent_caching:
+                        self.data_loader.get_data_set().start_next_epoch()
+                        self.model_setup.setup_train_device(self.model, self.config)
+                    else:
+                        self.model_setup.setup_train_device(self.model, self.config)
+                        self.data_loader.get_data_set().start_next_epoch()
 
             if self.config.debug_mode:
                 multi.warn_parameter_divergence(self.parameters, train_device)

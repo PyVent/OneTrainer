@@ -112,7 +112,7 @@ class WorkflowNavigation(QFrame):
     SECTIONS = (
         ("Prepare", (("general", "Overview"), ("model", "Model"), ("data", "Data"), ("concepts", "Concepts"))),
         ("Train", (("training", "Training"), ("LoRA", "LoRA"), ("embedding", "Embedding"),
-                   ("additional embeddings", "Additional embeddings"), ("backup", "Backups"))),
+                   ("additional embeddings", "Additional embeddings"), ("backup", "Checkpoints and exports"))),
         ("Generate", (("sampling", "Sampling"),)),
         ("Utilities", (("tools", "Tools"), ("cloud", "Cloud"))),
     )

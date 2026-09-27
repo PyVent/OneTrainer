@@ -54,11 +54,11 @@ class DataAndBackupLayoutTest(unittest.TestCase):
     def test_backup_fields_and_actions_are_preserved(self):
         page = self.view._tab_widgets["backup"]
         groups = page.findChildren(QGroupBox)
-        self.assertEqual([group.title() for group in groups], ["Automatic backups", "Model saves"])
+        self.assertEqual([group.title() for group in groups], ["Training checkpoints", "Trained weights export"])
         self.assertEqual([group.layout().rowCount() for group in groups], [5, 4])
         self.assertEqual(
             [button.text() for group in groups for button in group.findChildren(QPushButton)],
-            ["Backup Now", "Save Now"],
+            ["Save training checkpoint", "Export trained weights"],
         )
 
         filename = groups[1].layout().itemAtPosition(2, 1).widget()

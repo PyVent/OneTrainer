@@ -135,8 +135,8 @@ class BaseTrainUIView(ABC):
         self.components.path_entry(paths_frame, 1, 1, ui_state, "cache_dir", mode="dir")
 
         # continue from previous backup
-        self.components.label(paths_frame, 2, 0, "Continue from last backup",
-                         tooltip="Automatically continues training from the last backup saved in <workspace>/backup")
+        self.components.label(paths_frame, 2, 0, "Resume from latest training checkpoint",
+                         tooltip="Restore weights, optimizer, scheduler and training progress from the latest checkpoint in <workspace>/backup")
         self.components.switch(paths_frame, 2, 1, ui_state, "continue_last_backup")
 
         # only cache
@@ -273,25 +273,25 @@ class BaseTrainUIView(ABC):
 
     def build_backup_tab_content(self, backup_frame, save_frame, controller, ui_state):
         # backup after
-        self.components.label(backup_frame, 0, 0, "Backup After",
+        self.components.label(backup_frame, 0, 0, "Checkpoint interval",
                          tooltip="The interval used when automatically creating model backups during training")
         self.components.time_entry(backup_frame, 0, 1, ui_state, "backup_after", "backup_after_unit")
 
         # backup now
-        self.components.button(backup_frame, 4, 1, "Backup Now", self.backup_now, sticky="ne")
+        self.components.button(backup_frame, 4, 1, "Save training checkpoint", self.backup_now, sticky="ne")
 
         # rolling backup
-        self.components.label(backup_frame, 1, 0, "Rolling Backup",
+        self.components.label(backup_frame, 1, 0, "Rotate training checkpoints",
                          tooltip="If rolling backups are enabled, older backups are deleted automatically")
         self.components.switch(backup_frame, 1, 1, ui_state, "rolling_backup")
 
         # rolling backup count
-        self.components.label(backup_frame, 2, 0, "Rolling Backup Count",
+        self.components.label(backup_frame, 2, 0, "Checkpoints to keep",
                          tooltip="Defines the number of backups to keep if rolling backups are enabled")
         self.components.entry(backup_frame, 2, 1, ui_state, "rolling_backup_count")
 
         # backup before save
-        self.components.label(backup_frame, 3, 0, "Backup Before Save",
+        self.components.label(backup_frame, 3, 0, "Checkpoint before final export",
                          tooltip="Create a full backup before saving the final model")
         self.components.switch(backup_frame, 3, 1, ui_state, "backup_before_save")
 
@@ -301,7 +301,7 @@ class BaseTrainUIView(ABC):
         self.components.time_entry(save_frame, 0, 1, ui_state, "save_every", "save_every_unit")
 
         # save now
-        self.components.button(save_frame, 3, 1, "Save Now", self.save_now, sticky="ne")
+        self.components.button(save_frame, 3, 1, "Export trained weights", self.save_now, sticky="ne")
 
         # skip save
         self.components.label(save_frame, 1, 0, "Skip First",
